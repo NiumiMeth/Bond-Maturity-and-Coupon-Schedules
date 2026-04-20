@@ -3,16 +3,8 @@ import pandas as pd
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-def generate_full_coupon_schedule(maturity_date: datetime, coupon_payment: float):
-    dates = []
-    current = maturity_date
-    while current.year >= 2000:
-        dates.append({
-            "Date": current,
-            "Coupon Payment": coupon_payment
-        })
-        current -= relativedelta(months=6)
-    return dates
+
+# No need for generate_full_coupon_schedule anymore
 
 st.title("Sri Lanka Bond Maturity & Coupon Schedules")
 st.write("Upload a CSV file with bond data to generate coupon schedules.")
@@ -39,60 +31,35 @@ if uploaded_file:
 
     df['Coupon Payment'] = df['Coupon Payment'].astype(float)
 
-    all_schedules = []
-    for _, row in df.iterrows():
-        maturity = row['Maturity Date']
-        coupon = row['Coupon Payment']
-        # Use ISIN or Maturity Date as bond identifier
-        bond_id = row['ISIN'] if 'ISIN' in df.columns else str(maturity.date())
-        schedule = generate_full_coupon_schedule(maturity, coupon)
-        for entry in schedule:
-            all_schedules.append({
-                "Date": entry["Date"].strftime("%d-%b-%Y"),
-                "Month-Year": entry["Date"].strftime("%b-%Y"),
-                "Day": entry["Date"].day,
-                "Coupon Payment": entry["Coupon Payment"],
-                "Bond": bond_id
-            })
-
-    schedule_df = pd.DataFrame(all_schedules)
 
     # Add Month column for grouping
-    schedule_df['Month'] = pd.to_datetime(schedule_df['Date'], format='%d-%b-%Y').dt.strftime('%B')
-    months = schedule_df['Month'].unique()
+    df['Month'] = df['Maturity Date'].dt.strftime('%B')
+    months = df['Month'].unique()
     months_sorted = pd.to_datetime(months, format='%B').month.argsort()
     months = [months[i] for i in months_sorted]
 
-    st.write("### Coupon Payments Grouped by Month")
+    st.write("### Bonds Maturing Grouped by Month")
     for month in months:
-        month_df = schedule_df[schedule_df['Month'] == month]
+        month_df = df[df['Month'] == month]
         with st.expander(f"{month}"):
-            # Group by Date within the month
-            for date, group in month_df.groupby('Date'):
-                total_coupon = group["Coupon Payment"].sum()
-                bonds_table = group[["Bond", "Coupon Payment"]].reset_index(drop=True)
-                st.write(f"**Date:** {date}  |  **Total Coupon Payment:** {total_coupon:,.2f}")
-                st.table(bonds_table)
+            # Show table of ISIN, Maturity Date, Coupon Payment
+            show_cols = [col for col in ['ISIN', 'Maturity Date', 'Coupon Payment'] if col in month_df.columns]
+            st.table(month_df[show_cols].reset_index(drop=True))
 
     # Optionally, allow download of the grouped data as JSON
     import json
     output_json = []
     for month in months:
-        month_df = schedule_df[schedule_df['Month'] == month]
-        month_entry = {"Month": month, "Dates": []}
-        for date, group in month_df.groupby('Date'):
-            total_coupon = group["Coupon Payment"].sum()
-            bonds = group[["Bond", "Coupon Payment"]].to_dict(orient="records")
-            month_entry["Dates"].append({
-                "Date": date,
-                "Total_Coupon_Payment": round(total_coupon, 2),
-                "Bonds": bonds
-            })
-        output_json.append(month_entry)
+        month_df = df[df['Month'] == month]
+        bonds = month_df[[col for col in ['ISIN', 'Maturity Date', 'Coupon Payment'] if col in month_df.columns]].to_dict(orient="records")
+        output_json.append({
+            "Month": month,
+            "Bonds": bonds
+        })
     st.download_button(
         label="Download Grouped Data as JSON",
-        data=json.dumps(output_json, indent=2),
-        file_name="coupon_schedules_grouped_by_month.json",
+        data=json.dumps(output_json, indent=2, default=str),
+        file_name="bonds_grouped_by_month.json",
         mime="application/json"
     )
 else:
