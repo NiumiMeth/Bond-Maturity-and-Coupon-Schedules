@@ -10,7 +10,7 @@ import pandas as pd
 from datetime import datetime
 import json
 import os
-import google.genai as genai
+import google.generativeai as genai
 
 # ── Custom CSS ────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -472,8 +472,8 @@ def extract_bonds_from_pdf(pdf_bytes: bytes):
     if not api_key:
         raise ValueError("No Gemini API key found. Set GEMINI_API_KEY in Streamlit Secrets or your environment.")
 
-    genai.api_key = api_key
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
 
     prompt = """You are a financial data extraction specialist working for a Treasury department.
 Analyze this document and extract ALL bond / fixed-income instrument records.
