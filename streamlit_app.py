@@ -1,4 +1,7 @@
 import streamlit as st
+
+# Set Streamlit page config to wide mode
+st.set_page_config(layout="wide")
 import pandas as pd
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -38,13 +41,34 @@ if uploaded_file:
     months_sorted = pd.to_datetime(months, format='%B').month.argsort()
     months = [months[i] for i in months_sorted]
 
-    st.write("### Bonds Maturing Grouped by Month")
+    st.write("### Bonds Maturing Grouped by Month and Coupon Day")
     for month in months:
         month_df = df[df['Month'] == month]
+        # Add Day column
+        month_df = month_df.copy()
+        month_df['Day'] = month_df['Maturity Date'].dt.day
+        show_cols = [col for col in ['ISIN', 'Maturity Date', 'Coupon Payment'] if col in month_df.columns]
         with st.expander(f"{month}"):
-            # Show table of ISIN, Maturity Date, Coupon Payment
-            show_cols = [col for col in ['ISIN', 'Maturity Date', 'Coupon Payment'] if col in month_df.columns]
-            st.table(month_df[show_cols].reset_index(drop=True))
+            # 1st Coupons
+            first_df = month_df[month_df['Day'] == 1]
+            if not first_df.empty:
+                st.subheader("1st Coupons")
+                st.table(first_df[show_cols].reset_index(drop=True))
+                st.write(f"**Total Coupon Payment (1st):** {first_df['Coupon Payment'].sum():,.2f}")
+            # 15th Coupons
+            fifteenth_df = month_df[month_df['Day'] == 15]
+            if not fifteenth_df.empty:
+                st.subheader("15th Coupons")
+                st.table(fifteenth_df[show_cols].reset_index(drop=True))
+                st.write(f"**Total Coupon Payment (15th):** {fifteenth_df['Coupon Payment'].sum():,.2f}")
+            # Special Dates
+            special_df = month_df[~month_df['Day'].isin([1, 15])]
+            if not special_df.empty:
+                st.subheader("Special Date Coupons")
+                # Add a column to show the day for clarity
+                special_cols = show_cols + ['Day'] if 'Day' not in show_cols else show_cols
+                st.table(special_df[special_cols].reset_index(drop=True))
+                st.write(f"**Total Coupon Payment (Special Dates):** {special_df['Coupon Payment'].sum():,.2f}")
 
     # Optionally, allow download of the grouped data as JSON
     import json
