@@ -10,7 +10,7 @@ import pandas as pd
 from datetime import datetime
 import json
 import os
-import google.generativeai as genai
+import google.genai as genai
 
 # ── Custom CSS ────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -464,12 +464,16 @@ def render_dashboard(df, source_label="CSV"):
 
 
 def extract_bonds_from_pdf(pdf_bytes: bytes):
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    api_key = (
+        st.secrets.get("GEMINI_API_KEY")
+        or os.environ.get("GEMINI_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY")
+    )
     if not api_key:
-        raise ValueError("No Gemini API key found. Set GEMINI_API_KEY in your environment.")
+        raise ValueError("No Gemini API key found. Set GEMINI_API_KEY in Streamlit Secrets or your environment.")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.5-flash-lite-preview-06-17")
+    genai.api_key = api_key
+    model = genai.GenerativeModel("gemini-2.0-flash")
 
     prompt = """You are a financial data extraction specialist working for a Treasury department.
 Analyze this document and extract ALL bond / fixed-income instrument records.
@@ -490,10 +494,9 @@ Example output:
   {"ISIN": "LKB00015L026", "Maturity Date": "2026-01-15", "Coupon Payment": 3750000}
 ]"""
 
-    response = model.generate_content([
-        {"mime_type": "application/pdf", "data": pdf_bytes},
-        prompt
-    ])
+    response = model.generate_content(
+        [prompt, {"mime_type": "application/pdf", "data": pdf_bytes}]
+    )
 
     raw = response.text.strip()
     if raw.startswith("```"):
