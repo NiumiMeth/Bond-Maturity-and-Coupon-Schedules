@@ -1,4 +1,4 @@
-# Nipuna Bond Maturity
+# Bond Maturity
 
 A FastAPI-based application for processing Sri Lanka Treasury bond maturity and coupon schedules from uploaded CSV files.
 
