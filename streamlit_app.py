@@ -1,5 +1,5 @@
 import streamlit as st
-st.set_page_config(layout="wide", page_title="T-Bond Calculator", page_icon="🏛️")
+st.set_page_config(layout="wide", page_title="Coupon Schedules", page_icon="🏛️")
 
 import pandas as pd
 import numpy as np
@@ -704,7 +704,7 @@ def render_dashboard(results: list, key_suffix: str = "xl"):
 st.markdown(f"""
 <div class="page-header">
   <div class="sub">Central Bank of Sri Lanka · Fixed Income Operations</div>
-  <h1>Treasury Bond Calculator</h1>
+  <h1>Bond Maturity and Coupon Schedules</h1>
   <div class="ts">Upload a file with Maturity Date, ISIN, Series, Face Value → all other columns calculated automatically</div>
 </div>
 """, unsafe_allow_html=True)
