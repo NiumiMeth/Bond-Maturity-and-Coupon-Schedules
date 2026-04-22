@@ -591,7 +591,7 @@ def make_table(rows, show_step_col=False):
 </div>"""
 
 
-def render_dashboard(results: list):
+def render_dashboard(results: list, key_suffix: str = "xl"):
     normal = [r for r in results if r['Bond Type'] == 'normal']
     step2  = [r for r in results if r['Bond Type'] == 'step2']
     step3  = [r for r in results if r['Bond Type'] == 'step3']
@@ -694,7 +694,8 @@ def render_dashboard(results: list):
         label="⬇  Download Complete Excel",
         data=xlsx,
         file_name="T_Bonds_Calculated.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key=f"dl_excel_{key_suffix}"
     )
 
 
@@ -730,7 +731,7 @@ with tab_xl:
         if status == "ok" and df is not None:
             results = handle_df(df)
             if results:
-                render_dashboard(results)
+                render_dashboard(results, key_suffix="xl")
             else:
                 st.markdown('<div class="warn-box">⚠ No valid bond rows found. Check column names.</div>', unsafe_allow_html=True)
         else:
@@ -745,7 +746,7 @@ with tab_csv:
         if status == "ok" and df is not None:
             results = handle_df(df)
             if results:
-                render_dashboard(results)
+                render_dashboard(results, key_suffix="csv")
             else:
                 st.markdown('<div class="warn-box">⚠ No valid bond rows found. Check column names.</div>', unsafe_allow_html=True)
         else:
@@ -779,7 +780,7 @@ with tab_pdf:
             results = handle_df(df_pdf)
             if results:
                 st.success(f"✓ Extracted {len(results)} bonds from PDF")
-                render_dashboard(results)
+                render_dashboard(results, key_suffix="pdf")
         else:
             st.markdown('<div class="warn-box">⚠ No bond data found in PDF.</div>', unsafe_allow_html=True)
 
