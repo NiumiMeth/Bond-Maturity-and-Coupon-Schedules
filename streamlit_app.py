@@ -1,623 +1,793 @@
 import streamlit as st
-
-st.set_page_config(
-    layout="wide",
-    page_title="Treasury Bond Dashboard",
-    page_icon="🏛️"
-)
+st.set_page_config(layout="wide", page_title="T-Bond Calculator", page_icon="🏛️")
 
 import pandas as pd
-from datetime import datetime
+import numpy as np
+import io
+import re
 import json
-import os
-import google.generativeai as genai
+from datetime import date, datetime
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 
-# ── Custom CSS ────────────────────────────────────────────────────────────────
+# ─── CSS ──────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap');
 
-html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
-    background-color: #0D1117;
-    color: #E0E6F0;
-}
-.stApp {
-    background: linear-gradient(135deg, #0D1117 0%, #111827 60%, #0f1922 100%);
-}
+html, body, [class*="css"] { font-family: 'Outfit', sans-serif; background:#09100F; color:#D4E5D0; }
+.stApp { background: radial-gradient(ellipse at 20% 0%, #0f1e14 0%, #09100F 55%, #060d0b 100%); }
 #MainMenu, footer, header { visibility: hidden; }
-.block-container { padding-top: 2rem; padding-bottom: 3rem; max-width: 1400px; }
+.block-container { padding-top:2rem; padding-bottom:3rem; max-width:1400px; }
 
-/* ── Page header ── */
-.treasury-header {
-    border-bottom: 1px solid #C9A84C44;
-    padding-bottom: 1.5rem;
-    margin-bottom: 2.5rem;
-}
-.treasury-header h1 {
-    font-family: 'Playfair Display', serif;
-    font-size: 2.4rem;
-    font-weight: 700;
-    color: #E8D5A3;
-    letter-spacing: 0.02em;
-    margin: 0;
-    line-height: 1.2;
-}
-.treasury-header .subtitle {
-    font-size: 0.85rem;
-    color: #6B7FA3;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    margin-top: 0.4rem;
-}
-.treasury-header .timestamp {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.78rem;
-    color: #4B5E7A;
-    margin-top: 0.2rem;
-}
+.page-header { border-bottom:1px solid #2A4A3044; padding-bottom:1.5rem; margin-bottom:2.5rem; }
+.page-header h1 { font-family:'Cormorant Garamond',serif; font-size:2.6rem; font-weight:700;
+  color:#A8D5A2; letter-spacing:.01em; margin:0; line-height:1.1; }
+.page-header .sub { font-size:.8rem; color:#3D6B45; letter-spacing:.18em;
+  text-transform:uppercase; margin-top:.4rem; }
+.page-header .ts { font-family:'JetBrains Mono',monospace; font-size:.75rem;
+  color:#2A4A30; margin-top:.25rem; }
 
-/* ── Upload tabs ── */
-.stTabs [data-baseweb="tab-list"] {
-    background: #0F1820;
-    border-radius: 8px 8px 0 0;
-    border: 1px solid #1E2E42;
-    border-bottom: none;
-    gap: 0;
-}
-.stTabs [data-baseweb="tab"] {
-    font-family: 'DM Mono', monospace !important;
-    font-size: 0.78rem !important;
-    letter-spacing: 0.1em !important;
-    text-transform: uppercase !important;
-    color: #4B5E7A !important;
-    padding: 0.7rem 1.5rem !important;
-    border-radius: 0 !important;
-}
-.stTabs [aria-selected="true"] {
-    color: #C9A84C !important;
-    border-bottom: 2px solid #C9A84C !important;
-    background: transparent !important;
-}
-.stTabs [data-baseweb="tab-panel"] {
-    background: #0F1820;
-    border: 1px solid #1E2E42;
-    border-top: none;
-    border-radius: 0 0 8px 8px;
-    padding: 1.2rem;
-}
+/* tabs */
+.stTabs [data-baseweb="tab-list"] { background:#0d1a10; border-radius:8px 8px 0 0;
+  border:1px solid #1a3020; border-bottom:none; gap:0; }
+.stTabs [data-baseweb="tab"] { font-family:'JetBrains Mono',monospace !important;
+  font-size:.76rem !important; letter-spacing:.12em !important; text-transform:uppercase !important;
+  color:#3D6B45 !important; padding:.7rem 1.5rem !important; }
+.stTabs [aria-selected="true"] { color:#A8D5A2 !important;
+  border-bottom:2px solid #A8D5A2 !important; background:transparent !important; }
+.stTabs [data-baseweb="tab-panel"] { background:#0d1a10; border:1px solid #1a3020;
+  border-top:none; border-radius:0 0 8px 8px; padding:1.2rem; }
 
-/* ── Upload zone ── */
-[data-testid="stFileUploader"] {
-    background: #0a1018;
-    border: 1px dashed #C9A84C44;
-    border-radius: 6px;
-    padding: 0.5rem;
-}
-[data-testid="stFileUploader"]:hover { border-color: #C9A84CAA; }
-[data-testid="stFileUploaderDropzone"] { background: transparent !important; }
-[data-testid="stFileUploaderDropzone"] p { color: #6B7FA3; }
+/* upload */
+[data-testid="stFileUploader"] { background:#070f09; border:1px dashed #2A4A3066;
+  border-radius:6px; padding:.5rem; }
+[data-testid="stFileUploader"]:hover { border-color:#A8D5A288; }
+[data-testid="stFileUploaderDropzone"] p { color:#3D6B45; }
 
-/* ── AI extraction banner ── */
-.ai-banner {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    background: linear-gradient(90deg, #1a1f2e, #111827);
-    border: 1px solid #3B82F633;
-    border-left: 3px solid #3B82F6;
-    border-radius: 6px;
-    padding: 0.9rem 1.2rem;
-    margin: 1rem 0;
-    font-size: 0.83rem;
-    color: #93C5FD;
-}
-.ai-banner .icon { font-size: 1.2rem; flex-shrink: 0; }
+/* metrics */
+.metric-row { display:flex; gap:1.2rem; margin-bottom:2.5rem; flex-wrap:wrap; }
+.mc { flex:1; min-width:160px; background:linear-gradient(135deg,#0f1e14,#0d1a10);
+  border:1px solid #1a3020; border-top:2px solid #A8D5A2; border-radius:8px;
+  padding:1.2rem 1.5rem; }
+.mc.warn { border-top-color:#E8A44A; }
+.mc.danger { border-top-color:#E85A4A; }
+.mc .lbl { font-size:.7rem; font-weight:500; letter-spacing:.16em; text-transform:uppercase;
+  color:#3D6B45; margin-bottom:.5rem; }
+.mc .val { font-family:'JetBrains Mono',monospace; font-size:1.55rem; font-weight:500;
+  color:#A8D5A2; line-height:1; }
+.mc.warn .val { color:#E8A44A; }
+.mc.danger .val { color:#E85A4A; }
+.mc .sub { font-size:.73rem; color:#2A4A30; margin-top:.4rem; }
 
-.extraction-preview {
-    background: #0a1018;
-    border: 1px solid #1E2E42;
-    border-radius: 6px;
-    padding: 1rem;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.75rem;
-    color: #5EEAD4;
-    max-height: 200px;
-    overflow-y: auto;
-    margin: 0.8rem 0;
-    white-space: pre-wrap;
-}
+.sec-title { font-family:'Cormorant Garamond',serif; font-size:1.2rem; color:#A8D5A2;
+  letter-spacing:.04em; margin-bottom:1rem; padding-bottom:.5rem;
+  border-bottom:1px solid #1a3020; }
 
-/* ── Metric cards ── */
-.metric-row {
-    display: flex;
-    gap: 1.2rem;
-    margin-bottom: 2.5rem;
-}
-.metric-card {
-    flex: 1;
-    background: linear-gradient(135deg, #131D2B, #0F1820);
-    border: 1px solid #1E2E42;
-    border-top: 2px solid #C9A84C;
-    border-radius: 8px;
-    padding: 1.2rem 1.5rem;
-}
-.metric-card .label {
-    font-size: 0.72rem;
-    font-weight: 500;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: #5A7095;
-    margin-bottom: 0.5rem;
-}
-.metric-card .value {
-    font-family: 'DM Mono', monospace;
-    font-size: 1.6rem;
-    font-weight: 500;
-    color: #E8D5A3;
-    line-height: 1;
-}
-.metric-card .sub { font-size: 0.75rem; color: #4B5E7A; margin-top: 0.4rem; }
-.metric-card.source-pdf { border-top-color: #3B82F6; }
-.metric-card.source-pdf .value { color: #93C5FD; }
+/* badge */
+.badge { display:inline-block; font-family:'JetBrains Mono',monospace; font-size:.68rem;
+  padding:.18rem .6rem; border-radius:3px; font-weight:500; letter-spacing:.06em; }
+.bg { background:#A8D5A222; color:#A8D5A2; border:1px solid #A8D5A244; }
+.bw { background:#E8A44A22; color:#E8A44A; border:1px solid #E8A44A44; }
+.br { background:#E85A4A22; color:#E85A4A; border:1px solid #E85A4A44; }
+.bb { background:#5A9BD422; color:#93C5FD; border:1px solid #5A9BD444; }
 
-/* ── Section header ── */
-.section-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.15rem;
-    color: #C9A84C;
-    letter-spacing: 0.04em;
-    margin-bottom: 1.2rem;
-    padding-bottom: 0.6rem;
-    border-bottom: 1px solid #1E2E42;
-}
+/* table */
+.tbl-wrap { border-radius:6px; overflow:hidden; border:1px solid #1a3020; margin-bottom:.5rem; }
+.tbl { width:100%; border-collapse:collapse; font-size:.84rem; }
+.tbl thead th { background:#0a1610; color:#3D6B45; font-size:.66rem; font-weight:500;
+  letter-spacing:.16em; text-transform:uppercase; padding:.65rem 1rem;
+  text-align:left; border-bottom:1px solid #1a3020; }
+.tbl thead th.num { text-align:right; }
+.tbl tbody tr { border-bottom:1px solid #0f1e14; transition:background .15s; }
+.tbl tbody tr:last-child { border-bottom:none; }
+.tbl tbody tr:hover { background:#0f1e14; }
+.tbl tbody td { padding:.65rem 1rem; color:#B8D4B4; }
+.tbl tbody td.mono { font-family:'JetBrains Mono',monospace; font-size:.8rem; color:#93C5FD; }
+.tbl tbody td.dt { font-family:'JetBrains Mono',monospace; font-size:.8rem; color:#7A9B80; }
+.tbl tbody td.amt { font-family:'JetBrains Mono',monospace; text-align:right; color:#A8D5A2; }
+.tbl tbody td.warn { color:#E8A44A; font-family:'JetBrains Mono',monospace; }
+.tbl tfoot tr { background:#0a1610; border-top:1px solid #A8D5A233; }
+.tbl tfoot td { padding:.7rem 1rem; font-family:'JetBrains Mono',monospace;
+  font-size:.82rem; font-weight:500; color:#A8D5A2; letter-spacing:.08em; }
+.tbl tfoot td.ta { text-align:right; font-size:.92rem; }
 
-/* ── Month expander ── */
-[data-testid="stExpander"] {
-    background: #0F1820 !important;
-    border: 1px solid #1E2E42 !important;
-    border-radius: 8px !important;
-    margin-bottom: 0.7rem !important;
-}
-[data-testid="stExpander"] summary {
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 500;
-    font-size: 0.95rem;
-    color: #C4D4E8 !important;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    padding: 0.9rem 1.2rem !important;
-}
-[data-testid="stExpander"] summary:hover { color: #E8D5A3 !important; }
+.info-box { background:#0d1a10; border:1px dashed #1a3020; border-radius:8px;
+  padding:3rem 2rem; text-align:center; color:#1E3B25; }
+.info-box .ico { font-size:2.5rem; margin-bottom:1rem; }
+.info-box p { margin:0; font-size:.9rem; letter-spacing:.05em; }
 
-/* ── Badges ── */
-.badge {
-    display: inline-block;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.72rem;
-    padding: 0.2rem 0.65rem;
-    border-radius: 3px;
-    font-weight: 500;
-    letter-spacing: 0.06em;
-}
-.badge-gold  { background: #C9A84C22; color: #C9A84C; border: 1px solid #C9A84C44; }
-.badge-blue  { background: #3B82F622; color: #93C5FD; border: 1px solid #3B82F633; }
-.badge-teal  { background: #14B8A622; color: #5EEAD4; border: 1px solid #14B8A633; }
-.badge-pdf   { background: #7C3AED22; color: #C4B5FD; border: 1px solid #7C3AED44; font-size: 0.68rem; }
+.warn-box { background:#1a1208; border:1px solid #92400e44;
+  border-left:3px solid #E8A44A; border-radius:6px; padding:.9rem 1.2rem;
+  font-size:.83rem; color:#FCD34D; margin:.8rem 0; }
+.step-banner { background:#1a1008; border:1px solid #E85A4A44;
+  border-left:3px solid #E85A4A; border-radius:6px; padding:1rem 1.2rem;
+  margin:1rem 0; font-size:.83rem; color:#FCA5A5; }
+.step-banner strong { color:#E85A4A; }
 
-/* ── Group label ── */
-.group-label {
-    font-size: 0.7rem;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: #5A7095;
-    margin: 1rem 0 0.6rem 0;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-.group-label::after { content: ''; flex: 1; height: 1px; background: #1E2E42; }
+.grp-lbl { font-size:.68rem; letter-spacing:.18em; text-transform:uppercase;
+  color:#3D6B45; margin:1rem 0 .5rem 0; display:flex; align-items:center; gap:.5rem; }
+.grp-lbl::after { content:''; flex:1; height:1px; background:#1a3020; }
 
-/* ── Data table ── */
-.styled-table-wrap {
-    border-radius: 6px;
-    overflow: hidden;
-    border: 1px solid #1E2E42;
-    margin-bottom: 0.5rem;
-}
-.styled-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
-.styled-table thead th {
-    background: #111827;
-    color: #5A7095;
-    font-size: 0.68rem;
-    font-weight: 500;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    padding: 0.7rem 1rem;
-    text-align: left;
-    border-bottom: 1px solid #1E2E42;
-}
-.styled-table thead th.num { text-align: right; }
-.styled-table tbody tr { border-bottom: 1px solid #141F2D; transition: background 0.15s; }
-.styled-table tbody tr:last-child { border-bottom: none; }
-.styled-table tbody tr:hover { background: #131D2B; }
-.styled-table tbody td { padding: 0.7rem 1rem; color: #C4D4E8; }
-.styled-table tbody td.isin {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.82rem;
-    color: #93C5FD;
-    letter-spacing: 0.04em;
-}
-.styled-table tbody td.date {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.82rem;
-    color: #94A3B8;
-}
-.styled-table tbody td.amount {
-    font-family: 'DM Mono', monospace;
-    text-align: right;
-    color: #E8D5A3;
-}
-.styled-table tfoot tr { background: #111827; border-top: 1px solid #C9A84C44; }
-.styled-table tfoot td {
-    padding: 0.75rem 1rem;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.84rem;
-    font-weight: 500;
-    color: #C9A84C;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-}
-.styled-table tfoot td.total-amt { text-align: right; font-size: 0.95rem; }
+[data-testid="stExpander"] { background:#0d1a10 !important; border:1px solid #1a3020 !important;
+  border-radius:8px !important; margin-bottom:.7rem !important; }
+[data-testid="stExpander"] summary { font-family:'Outfit',sans-serif; font-weight:500;
+  font-size:.92rem; color:#8BB888 !important; letter-spacing:.06em;
+  text-transform:uppercase; padding:.85rem 1.2rem !important; }
+[data-testid="stExpander"] summary:hover { color:#A8D5A2 !important; }
 
-/* ── Info / warn boxes ── */
-.info-box {
-    background: #131D2B;
-    border: 1px dashed #1E2E42;
-    border-radius: 8px;
-    padding: 3rem 2rem;
-    text-align: center;
-    color: #3D5070;
-}
-.info-box .icon { font-size: 2.5rem; margin-bottom: 1rem; }
-.info-box p { margin: 0; font-size: 0.9rem; letter-spacing: 0.05em; }
-.warn-box {
-    background: #1a1208;
-    border: 1px solid #92400e44;
-    border-left: 3px solid #F59E0B;
-    border-radius: 6px;
-    padding: 0.9rem 1.2rem;
-    font-size: 0.83rem;
-    color: #FCD34D;
-    margin: 0.8rem 0;
-}
-
-/* ── Download btn ── */
-.stDownloadButton button {
-    background: transparent !important;
-    border: 1px solid #C9A84C66 !important;
-    color: #C9A84C !important;
-    font-family: 'DM Mono', monospace !important;
-    font-size: 0.78rem !important;
-    letter-spacing: 0.12em !important;
-    text-transform: uppercase !important;
-    border-radius: 4px !important;
-    padding: 0.5rem 1.2rem !important;
-    transition: all 0.2s !important;
-}
-.stDownloadButton button:hover {
-    background: #C9A84C11 !important;
-    border-color: #C9A84CAA !important;
-}
-[data-testid="stDataFrame"] {
-    border: 1px solid #1E2E42 !important;
-    border-radius: 6px !important;
-}
+.stDownloadButton button { background:transparent !important;
+  border:1px solid #A8D5A266 !important; color:#A8D5A2 !important;
+  font-family:'JetBrains Mono',monospace !important; font-size:.76rem !important;
+  letter-spacing:.12em !important; text-transform:uppercase !important;
+  border-radius:4px !important; padding:.5rem 1.2rem !important; }
+.stDownloadButton button:hover { background:#A8D5A211 !important; border-color:#A8D5A2AA !important; }
 </style>
 """, unsafe_allow_html=True)
 
+# ─── CALCULATION LOGIC ────────────────────────────────────────────────────────
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-def make_table_html(rows_df, show_cols):
-    header_cells = ""
-    for col in show_cols:
-        cls = "num" if col == "Coupon Payment" else ""
-        label = "Coupon Payment (LKR)" if col == "Coupon Payment" else col
-        header_cells += f'<th class="{cls}">{label}</th>'
-
-    body_rows = ""
-    for _, row in rows_df.iterrows():
-        body_rows += "<tr>"
-        for col in show_cols:
-            if col == "ISIN":
-                body_rows += f'<td class="isin">{row[col]}</td>'
-            elif col == "Maturity Date":
-                body_rows += f'<td class="date">{pd.to_datetime(row[col]).strftime("%d %b %Y")}</td>'
-            elif col == "Coupon Payment":
-                body_rows += f'<td class="amount">{float(row[col]):,.2f}</td>'
-            else:
-                body_rows += f'<td>{row[col]}</td>'
-        body_rows += "</tr>"
-
-    total = rows_df["Coupon Payment"].sum()
-    count = len(rows_df)
-    return f"""
-<div class="styled-table-wrap">
-  <table class="styled-table">
-    <thead><tr>{header_cells}</tr></thead>
-    <tbody>{body_rows}</tbody>
-    <tfoot>
-      <tr>
-        <td colspan="{len(show_cols)-1}">Total · {count} bond{'s' if count!=1 else ''}</td>
-        <td class="total-amt">{total:,.2f}</td>
-      </tr>
-    </tfoot>
-  </table>
-</div>
-"""
+REF_DATE = date(2026, 3, 31)
+APR_BASE = date(2026, 4, 1)
+MAY_BASE = date(2026, 5, 1)
 
 
-def clean_df(df):
-    if "Coupon Payment" not in df.columns:
-        if "Semiannual Coupon Payment" in df.columns:
-            df.rename(columns={"Semiannual Coupon Payment": "Coupon Payment"}, inplace=True)
+def parse_series(series: str):
+    """
+    Return (bond_type, rates_list) where bond_type is 'normal','step2','step3'
+    and rates_list is list of floats (e.g. [0.09] or [0.12, 0.09] or [0.12,0.09,0.07])
+    """
+    series = str(series).strip()
+    pcts = re.findall(r'(\d{1,2}\.\d{2})%', series)
+    if not pcts:
+        pcts = re.findall(r'(\d{1,2}(?:\.\d+)?)%', series)
+
+    rates = [float(p) / 100 for p in pcts]
+
+    if len(rates) == 0:
+        return 'normal', [0.0]
+    elif len(rates) == 1:
+        return 'normal', rates
+    elif len(rates) == 2:
+        return 'step2', rates
+    else:
+        return 'step3', rates
+
+
+def calc_remaining_coupons(maturity: date) -> float:
+    """Validated formula: months from Apr/May 2026 base to maturity ÷ 6"""
+    base = APR_BASE if maturity.day >= 15 else MAY_BASE
+    months = (maturity.year - base.year) * 12 + (maturity.month - base.month)
+    return round(months / 6, 2)
+
+
+def calc_coupon_rate_from_series(series: str) -> float:
+    """Extract current (final/active) coupon rate from series string."""
+    bond_type, rates = parse_series(series)
+    return rates[-1] if rates else 0.0
+
+
+def process_row(row: dict) -> dict:
+    """
+    Given a row with Maturity Date, ISIN, Series, Face Value,
+    calculate all derived columns.
+    """
+    mat_raw = row.get('Maturity Date')
+    if isinstance(mat_raw, str):
+        for fmt in ['%d-%b-%y', '%d-%b-%Y', '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y']:
+            try:
+                mat = datetime.strptime(mat_raw.strip(), fmt).date()
+                break
+            except:
+                pass
         else:
-            return None, "Missing 'Coupon Payment' or 'Semiannual Coupon Payment' column."
-    df["Maturity Date"]  = pd.to_datetime(df["Maturity Date"])
-    df["Coupon Payment"] = pd.to_numeric(df["Coupon Payment"], errors="coerce").fillna(0)
-    df["Month"]          = df["Maturity Date"].dt.strftime("%B")
-    df["MonthNum"]       = df["Maturity Date"].dt.month
-    df["Day"]            = df["Maturity Date"].dt.day
-    return df, None
+            mat = None
+    elif isinstance(mat_raw, (datetime,)):
+        mat = mat_raw.date()
+    elif isinstance(mat_raw, date):
+        mat = mat_raw
+    elif pd.notna(mat_raw):
+        try:
+            mat = pd.to_datetime(mat_raw).date()
+        except:
+            mat = None
+    else:
+        mat = None
+
+    series = str(row.get('Series', ''))
+    face   = float(str(row.get('Face Value (Rs Mn)', 0)).replace(',', '')) if pd.notna(row.get('Face Value (Rs Mn)')) else 0.0
+
+    bond_type, rates = parse_series(series)
+    current_rate     = rates[-1] if rates else 0.0
+
+    remaining   = calc_remaining_coupons(mat) if mat else None
+    semi_coupon = round(face * current_rate / 2, 5) if face and current_rate else None
+    total_pay   = round(semi_coupon * remaining, 4) if semi_coupon and remaining else None
+
+    if bond_type == 'normal':
+        coupon_rate_str = f"{current_rate*100:.2f}%"
+    else:
+        coupon_rate_str = '/'.join(f"{r*100:.2f}%" for r in rates)
+
+    return {
+        'Maturity Date':              mat.strftime('%d-%b-%y') if mat else str(mat_raw),
+        'ISIN':                       row.get('ISIN', ''),
+        'Series':                     series,
+        'Face Value (Rs Mn)':         face,
+        'Coupon Rate':                coupon_rate_str,
+        'Current Rate':               current_rate,
+        'Remaining Coupons':          remaining,
+        'Semiannual Coupon Payment':  semi_coupon,
+        'Total Payment Until Maturity': total_pay,
+        'Bond Type':                  bond_type,
+        'All Rates':                  rates,
+        '_mat':                       mat,
+    }
 
 
-def render_dashboard(df, source_label="CSV"):
-    is_pdf     = source_label == "PDF"
-    card_class = "metric-card source-pdf" if is_pdf else "metric-card"
+def parse_uploaded_file(uploaded_file):
+    """
+    Robustly parse Excel, CSV with potential header noise.
+    Finds the row containing the 4 key columns and reads from there.
+    """
+    name = uploaded_file.name.lower()
+    raw_bytes = uploaded_file.read()
 
-    total_bonds   = len(df)
-    total_coupon  = df["Coupon Payment"].sum()
-    unique_months = df["Month"].nunique()
-    avg_coupon    = df["Coupon Payment"].mean()
+    REQUIRED = ['maturity date', 'isin', 'series', 'face value']
 
-    if is_pdf:
+    def find_header_row(df_raw):
+        for i, row in df_raw.iterrows():
+            vals = [str(v).lower().strip() for v in row.values]
+            matches = sum(any(req in v for v in vals) for req in REQUIRED)
+            if matches >= 3:
+                return i
+        return None
+
+    if name.endswith('.csv'):
+        df_raw = pd.read_csv(io.BytesIO(raw_bytes), header=None)
+        hrow   = find_header_row(df_raw)
+        if hrow is not None:
+            df = pd.read_csv(io.BytesIO(raw_bytes), skiprows=hrow)
+        else:
+            df = pd.read_csv(io.BytesIO(raw_bytes))
+
+    elif name.endswith(('.xlsx', '.xls')):
+        df_raw = pd.read_excel(io.BytesIO(raw_bytes), header=None)
+        hrow   = find_header_row(df_raw)
+        if hrow is not None:
+            df = pd.read_excel(io.BytesIO(raw_bytes), skiprows=hrow)
+        else:
+            df = pd.read_excel(io.BytesIO(raw_bytes))
+
+    elif name.endswith('.pdf'):
+        return None, "pdf"
+    else:
+        return None, "unsupported"
+
+    col_map = {}
+    mapped_targets = set()
+    for col in df.columns:
+        cl = str(col).lower().strip()
+        target = None
+        if 'maturity' in cl or ('date' in cl and 'mat' in cl):
+            target = 'Maturity Date'
+        elif cl == 'isin' or 'isin' in cl:
+            target = 'ISIN'
+        elif 'series' in cl:
+            target = 'Series'
+        elif 'face' in cl or ('value' in cl and 'face' in cl):
+            target = 'Face Value (Rs Mn)'
+        
+        if target and target not in mapped_targets:
+            col_map[col] = target
+            mapped_targets.add(target)
+    
+    df.rename(columns=col_map, inplace=True)
+
+    if 'Maturity Date' in df.columns:
+        df = df[df['Maturity Date'].notna()]
+        df = df[df['Maturity Date'].astype(str).str.strip() != '']
+        df = df[df['Maturity Date'].astype(str).str.strip().str.lower() != 'maturity date']
+
+    return df, "ok"
+
+
+def extract_pdf_directly(pdf_bytes: bytes):
+    """Extract bond data directly from PDF using pdfplumber (no AI needed)."""
+    import pdfplumber
+    import io
+    
+    records = []
+    
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        for page in pdf.pages:
+            # Try to extract tables from the page
+            tables = page.extract_tables()
+            
+            if not tables:
+                continue
+            
+            for table in tables:
+                if not table:
+                    continue
+                
+                # Find header row by looking for key column names
+                header_row_idx = None
+                for idx, row in enumerate(table):
+                    row_lower = [str(cell).lower().strip() if cell else '' for cell in row]
+                    if any('maturity' in cell for cell in row_lower) and \
+                       any('isin' in cell for cell in row_lower):
+                        header_row_idx = idx
+                        break
+                
+                if header_row_idx is None:
+                    # Try to infer header as first row if it looks like headers
+                    if table[0]:
+                        header_row_idx = 0
+                    else:
+                        continue
+                
+                # Map column indices to our required fields
+                header = table[header_row_idx]
+                col_map = {}
+                
+                for col_idx, cell in enumerate(header):
+                    if cell is None:
+                        continue
+                    cell_lower = str(cell).lower().strip()
+                    
+                    if 'maturity' in cell_lower or ('date' in cell_lower and 'mat' in cell_lower):
+                        col_map['maturity_date'] = col_idx
+                    elif 'isin' in cell_lower:
+                        col_map['isin'] = col_idx
+                    elif 'series' in cell_lower:
+                        col_map['series'] = col_idx
+                    elif 'face' in cell_lower or ('value' in cell_lower and 'face' in cell_lower):
+                        col_map['face_value'] = col_idx
+                
+                # Extract data rows (skip header and empty rows)
+                for row_idx in range(header_row_idx + 1, len(table)):
+                    row = table[row_idx]
+                    
+                    # Skip empty or incomplete rows
+                    if not row or all(cell is None or str(cell).strip() == '' for cell in row):
+                        continue
+                    
+                    # Try to extract required fields
+                    try:
+                        record = {}
+                        
+                        if 'maturity_date' in col_map:
+                            record['Maturity Date'] = row[col_map['maturity_date']]
+                        if 'isin' in col_map:
+                            record['ISIN'] = row[col_map['isin']]
+                        if 'series' in col_map:
+                            record['Series'] = row[col_map['series']]
+                        if 'face_value' in col_map:
+                            fv = row[col_map['face_value']]
+                            # Clean up face value (remove commas, convert to float)
+                            if fv:
+                                fv_str = str(fv).replace(',', '').strip()
+                                try:
+                                    record['Face Value (Rs Mn)'] = float(fv_str)
+                                except:
+                                    record['Face Value (Rs Mn)'] = fv
+                        
+                        # Only add if we have at least Maturity Date
+                        if 'Maturity Date' in record and record['Maturity Date']:
+                            records.append(record)
+                    except Exception as e:
+                        continue
+    
+    return records
+
+
+# ─── EXCEL EXPORT ─────────────────────────────────────────────────────────────
+
+def build_excel(results: list) -> bytes:
+    wb  = Workbook()
+
+    DARK  = "1A2E1A"
+    MID   = "2A4A30"
+    LIGHT = "A8D5A2"
+    WARN  = "E8A44A"
+    RED   = "E85A4A"
+    WHITE = "FFFFFF"
+    ALT1  = "0F1E14"
+    ALT2  = "0D1A10"
+    YBG   = "2A1F0A"
+    RBGC  = "2A0F0A"
+
+    def s(style='thin', color="2A4A30"):
+        return Side(style=style, color=color)
+    def tb():
+        return Border(left=s(), right=s(), top=s(), bottom=s())
+    def mb():
+        return Border(left=s('medium', DARK), right=s('medium', DARK),
+                      top=s('medium', DARK), bottom=s('medium', DARK))
+
+    normal = [r for r in results if r['Bond Type'] == 'normal']
+    step2  = [r for r in results if r['Bond Type'] == 'step2']
+    step3  = [r for r in results if r['Bond Type'] == 'step3']
+
+    sheet_data = [("All Bonds", results), ("Normal Bonds", normal)]
+    if step2: sheet_data.append(("2-Step Bonds", step2))
+    if step3: sheet_data.append(("3-Step Bonds", step3))
+
+    first = True
+    for sheet_name, data in sheet_data:
+        if first:
+            ws = wb.active
+            ws.title = sheet_name
+            first = False
+        else:
+            ws = wb.create_sheet(sheet_name)
+
+        ws.merge_cells('A1:I1')
+        c = ws['A1']
+        c.value = f"Treasury Bonds Outstanding — As at 31 March 2026 ({sheet_name})"
+        c.font = Font(name='Arial', bold=True, size=12, color=LIGHT)
+        c.fill = PatternFill('solid', fgColor=DARK)
+        c.alignment = Alignment(horizontal='center', vertical='center')
+        ws.row_dimensions[1].height = 26
+
+        if sheet_name != "Normal Bonds" and (step2 or step3):
+            ws.merge_cells('A2:I2')
+            c = ws['A2']
+            stepped = [r for r in data if r['Bond Type'] != 'normal']
+            if stepped and sheet_name == "All Bonds":
+                c.value = (f"⚠  {len(step2)} two-step bond(s) and {len(step3)} three-step bond(s) flagged. "
+                           f"Calculations use current/final coupon rate only — verify step dates.")
+            elif sheet_name in ("2-Step Bonds", "3-Step Bonds"):
+                c.value = "⚠  Stepped coupon bonds — calculations use current/final rate only. Step dates required for full accuracy."
+            c.font = Font(name='Arial', size=9, color="FCD34D")
+            c.fill = PatternFill('solid', fgColor="1A1208")
+            c.alignment = Alignment(horizontal='center', vertical='center')
+            ws.row_dimensions[2].height = 18
+            hdr_row = 3
+        else:
+            hdr_row = 2
+
+        headers = ["Maturity Date", "ISIN", "Series", "Face Value (Rs Mn)",
+                   "Coupon Rate", "Bond Type", "Remaining Coupons",
+                   "Semiannual Coupon Payment", "Total Payment Until Maturity"]
+
+        ws.row_dimensions[hdr_row].height = 32
+        for ci, h in enumerate(headers, 1):
+            c = ws.cell(row=hdr_row, column=ci, value=h)
+            c.font = Font(name='Arial', bold=True, size=9, color=WHITE)
+            c.fill = PatternFill('solid', fgColor=MID)
+            c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            c.border = tb()
+
+        for ri, row in enumerate(data):
+            er  = ri + hdr_row + 1
+            bt  = row['Bond Type']
+            bg  = YBG if bt == 'step2' else (RBGC if bt == 'step3' else (ALT1 if ri % 2 == 0 else ALT2))
+            fc  = WARN if bt == 'step2' else (RED if bt == 'step3' else WHITE)
+            fill = PatternFill('solid', fgColor=bg)
+
+            vals = [
+                row['Maturity Date'], row['ISIN'], row['Series'],
+                row['Face Value (Rs Mn)'], row['Coupon Rate'],
+                {'normal':'Normal','step2':'2-Step ⚠','step3':'3-Step ⚠⚠'}.get(bt, bt),
+                row['Remaining Coupons'],
+                row['Semiannual Coupon Payment'],
+                row['Total Payment Until Maturity'],
+            ]
+            for ci, val in enumerate(vals, 1):
+                c = ws.cell(row=er, column=ci, value=val)
+                c.fill = fill
+                c.border = tb()
+                c.font = Font(name='Arial', size=9, color=fc)
+                if ci == 4:
+                    c.number_format = '#,##0.00'
+                    c.alignment = Alignment(horizontal='right')
+                elif ci == 5:
+                    c.alignment = Alignment(horizontal='center')
+                elif ci == 7:
+                    c.number_format = '0.00'
+                    c.alignment = Alignment(horizontal='center')
+                elif ci in (8, 9):
+                    c.number_format = '#,##0.000'
+                    c.alignment = Alignment(horizontal='right')
+                else:
+                    c.alignment = Alignment(horizontal='center' if ci == 1 else 'left')
+
+        tr = hdr_row + len(data) + 1
+        ws.merge_cells(f'A{tr}:C{tr}')
+        c = ws.cell(row=tr, column=1, value="TOTAL")
+        c.font = Font(name='Arial', bold=True, size=9, color=LIGHT)
+        c.fill = PatternFill('solid', fgColor=DARK)
+        c.alignment = Alignment(horizontal='center')
+        c.border = mb()
+
+        for ci, col_idx in [(4, 4), (8, 8), (9, 9)]:
+            cl = get_column_letter(ci)
+            c = ws.cell(row=tr, column=ci)
+            c.value = f'=SUM({cl}{hdr_row+1}:{cl}{tr-1})'
+            c.font = Font(name='Arial', bold=True, size=9, color=LIGHT)
+            c.fill = PatternFill('solid', fgColor=DARK)
+            c.border = mb()
+            c.alignment = Alignment(horizontal='right')
+            c.number_format = '#,##0.00' if ci == 4 else '#,##0.000'
+
+        for ci in (5, 6, 7):
+            c = ws.cell(row=tr, column=ci)
+            c.value = ''
+            c.fill = PatternFill('solid', fgColor=DARK)
+            c.border = mb()
+
+        for ci, w in enumerate([13, 18, 24, 16, 20, 12, 14, 22, 24], 1):
+            ws.column_dimensions[get_column_letter(ci)].width = w
+
+        ws.freeze_panes = f'A{hdr_row+1}'
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+# ─── DASHBOARD RENDER ─────────────────────────────────────────────────────────
+
+def make_table(rows, show_step_col=False):
+    cols = ["ISIN", "Series", "Maturity Date", "Face Value (Rs Mn)",
+            "Coupon Rate", "Remaining Coupons", "Semiannual Coupon Payment",
+            "Total Payment Until Maturity"]
+    if show_step_col:
+        cols = ["Bond Type"] + cols
+
+    hdr = "".join(
+        f'<th class="num">{c}</th>' if c in ("Face Value (Rs Mn)", "Semiannual Coupon Payment",
+                                             "Total Payment Until Maturity", "Remaining Coupons")
+        else f'<th>{c}</th>' for c in cols
+    )
+
+    body = ""
+    for r in rows:
+        bt = r['Bond Type']
+        row_cls = ' class="step-row"' if bt != 'normal' else ''
+        body += f"<tr{row_cls}>"
+        for c in cols:
+            v = r.get(c, '')
+            if c == "Bond Type":
+                badge = {'normal':'<span class="badge bg">Normal</span>',
+                         'step2': '<span class="badge bw">2-Step ⚠</span>',
+                         'step3': '<span class="badge br">3-Step ⚠⚠</span>'}.get(bt, bt)
+                body += f'<td>{badge}</td>'
+            elif c == "ISIN":
+                body += f'<td class="mono">{v}</td>'
+            elif c == "Maturity Date":
+                body += f'<td class="dt">{v}</td>'
+            elif c in ("Face Value (Rs Mn)", "Semiannual Coupon Payment", "Total Payment Until Maturity"):
+                try:
+                    body += f'<td class="amt">{float(v):,.3f}</td>'
+                except:
+                    body += f'<td class="amt">{v}</td>'
+            elif c == "Remaining Coupons":
+                try:
+                    body += f'<td class="amt">{float(v):.2f}</td>'
+                except:
+                    body += f'<td class="amt">{v}</td>'
+            elif c == "Coupon Rate" and bt != 'normal':
+                body += f'<td class="warn">{v}</td>'
+            else:
+                body += f'<td>{v}</td>'
+        body += "</tr>"
+
+    total_pay = sum(r.get('Total Payment Until Maturity') or 0 for r in rows)
+    n = len(rows)
+    ncols = len(cols)
+    foot = f'<td colspan="{ncols-1}">Total · {n} bond{"s" if n!=1 else ""}</td><td class="ta">{total_pay:,.3f}</td>'
+
+    return f"""
+<div class="tbl-wrap">
+<table class="tbl">
+<thead><tr>{hdr}</tr></thead>
+<tbody>{body}</tbody>
+<tfoot><tr>{foot}</tr></tfoot>
+</table>
+</div>"""
+
+
+def render_dashboard(results: list):
+    normal = [r for r in results if r['Bond Type'] == 'normal']
+    step2  = [r for r in results if r['Bond Type'] == 'step2']
+    step3  = [r for r in results if r['Bond Type'] == 'step3']
+    stepped = step2 + step3
+
+    total_pay  = sum(r.get('Total Payment Until Maturity') or 0 for r in results)
+    total_face = sum(r.get('Face Value (Rs Mn)') or 0 for r in results)
+    n_stepped  = len(stepped)
+    n_normal   = len(normal)
+
+    if stepped:
+        types = []
+        if step2: types.append(f"<strong>{len(step2)} two-step</strong>")
+        if step3: types.append(f"<strong>{len(step3)} three-step</strong>")
         st.markdown(f"""
-        <div class="ai-banner">
-          <span class="icon">🤖</span>
-          <span>Bond data extracted from PDF using Gemini AI · <strong>{total_bonds} instruments</strong> identified ·
-          Please verify figures against the source document before use.</span>
-          <span class="badge badge-pdf">AI Extracted</span>
+        <div class="step-banner">
+          ⚠ &nbsp; {' and '.join(types)} bond{'s' if n_stepped>1 else ''} detected in this file.
+          These bonds have <strong>multiple coupon rates</strong> — calculations use the <strong>current/final rate only</strong>.
+          Step dates are required for full accuracy. They are flagged separately below.
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown(f"""
     <div class="metric-row">
-      <div class="{card_class}">
-        <div class="label">Total Bonds</div>
-        <div class="value">{total_bonds}</div>
-        <div class="sub">Instruments in portfolio</div>
+      <div class="mc">
+        <div class="lbl">Total Bonds</div>
+        <div class="val">{len(results)}</div>
+        <div class="sub">{n_normal} normal · {n_stepped} stepped</div>
       </div>
-      <div class="{card_class}">
-        <div class="label">Total Coupon Obligations</div>
-        <div class="value">LKR {total_coupon:,.0f}</div>
-        <div class="sub">Aggregate semiannual outflow</div>
+      <div class="mc">
+        <div class="lbl">Total Face Value</div>
+        <div class="val">Rs {total_face:,.0f}Mn</div>
+        <div class="sub">Aggregate outstanding</div>
       </div>
-      <div class="{card_class}">
-        <div class="label">Active Months</div>
-        <div class="value">{unique_months}</div>
-        <div class="sub">Months with coupon events</div>
+      <div class="mc">
+        <div class="lbl">Total Coupon Payments</div>
+        <div class="val">Rs {total_pay:,.0f}Mn</div>
+        <div class="sub">Sum of total payments</div>
       </div>
-      <div class="{card_class}">
-        <div class="label">Avg Coupon / Bond</div>
-        <div class="value">LKR {avg_coupon:,.0f}</div>
-        <div class="sub">Mean per instrument</div>
-      </div>
+      {"" if not stepped else f'<div class="mc warn"><div class="lbl">Stepped Bonds</div><div class="val">{n_stepped}</div><div class="sub">Require step-date verification</div></div>'}
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="section-title">Coupon Schedule by Month &amp; Settlement Date</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-title">Normal Bonds — Schedule by Maturity Month</div>', unsafe_allow_html=True)
+    if normal:
+        for r in normal:
+            if r['_mat']:
+                r['_month'] = r['_mat'].strftime('%B')
+                r['_monthnum'] = r['_mat'].month
+            else:
+                r['_month'] = 'Unknown'
+                r['_monthnum'] = 99
 
-    months_order = df.sort_values("MonthNum")["Month"].unique()
-    show_cols    = [c for c in ["ISIN", "Maturity Date", "Coupon Payment"] if c in df.columns]
+        months = sorted(set((r['_monthnum'], r['_month']) for r in normal), key=lambda x: x[0])
 
-    for month in months_order:
-        month_df    = df[df["Month"] == month].copy()
-        month_total = month_df["Coupon Payment"].sum()
-        bond_count  = len(month_df)
+        for mnum, mname in months:
+            month_rows = [r for r in normal if r['_monthnum'] == mnum]
+            mtotal = sum(r.get('Total Payment Until Maturity') or 0 for r in month_rows)
+            with st.expander(f"{mname}  ·  Rs {mtotal:,.0f} Mn  ·  {len(month_rows)} bond{'s' if len(month_rows)!=1 else ''}"):
+                first_rows = [r for r in month_rows if r['_mat'] and r['_mat'].day == 1]
+                fif_rows   = [r for r in month_rows if r['_mat'] and r['_mat'].day == 15]
+                other_rows = [r for r in month_rows if r['_mat'] and r['_mat'].day not in (1, 15)]
 
-        with st.expander(f"{month}  ·  LKR {month_total:,.0f}  ·  {bond_count} bond{'s' if bond_count!=1 else ''}"):
-            first_df   = month_df[month_df["Day"] == 1]
-            fifteen_df = month_df[month_df["Day"] == 15]
-            special_df = month_df[~month_df["Day"].isin([1, 15])]
+                if first_rows:
+                    st.markdown('<div class="grp-lbl"><span class="badge bg">1st</span></div>', unsafe_allow_html=True)
+                    st.markdown(make_table(first_rows), unsafe_allow_html=True)
+                if fif_rows:
+                    st.markdown('<div class="grp-lbl"><span class="badge bb">15th</span></div>', unsafe_allow_html=True)
+                    st.markdown(make_table(fif_rows), unsafe_allow_html=True)
+                if other_rows:
+                    st.markdown('<div class="grp-lbl"><span class="badge bw">Other Date</span></div>', unsafe_allow_html=True)
+                    st.markdown(make_table(other_rows), unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="info-box"><div class="ico">📋</div><p>No normal bonds found.</p></div>', unsafe_allow_html=True)
 
-            if not first_df.empty:
-                st.markdown('<div class="group-label"><span class="badge badge-gold">1st</span> Settlement</div>', unsafe_allow_html=True)
-                st.markdown(make_table_html(first_df, show_cols), unsafe_allow_html=True)
-            if not fifteen_df.empty:
-                st.markdown('<div class="group-label"><span class="badge badge-blue">15th</span> Settlement</div>', unsafe_allow_html=True)
-                st.markdown(make_table_html(fifteen_df, show_cols), unsafe_allow_html=True)
-            if not special_df.empty:
-                st.markdown('<div class="group-label"><span class="badge badge-teal">Special Date</span> Settlement</div>', unsafe_allow_html=True)
-                special_show = show_cols + (["Day"] if "Day" not in show_cols else [])
-                st.markdown(make_table_html(special_df, special_show), unsafe_allow_html=True)
+    if step2:
+        st.markdown('<div class="sec-title" style="color:#E8A44A">2-Step Bonds ⚠</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div class="warn-box">
+          These bonds have <strong>two coupon rates</strong> (e.g. 12.00%→09.00%).
+          The calculations below use the <strong>current/final rate</strong> only.
+          To calculate accurately, provide the step-down date so coupons at each rate can be counted separately.
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown(make_table(step2, show_step_col=True), unsafe_allow_html=True)
 
-    with st.expander("View Raw Extracted Data"):
-        st.dataframe(df.drop(columns=["Month", "MonthNum", "Day"], errors="ignore"), use_container_width=True)
+    if step3:
+        st.markdown('<div class="sec-title" style="color:#E85A4A">3-Step Bonds ⚠⚠</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div class="warn-box" style="border-left-color:#E85A4A;color:#FCA5A5">
+          These bonds have <strong>three coupon rates</strong> and require both step dates for accurate calculation.
+          Figures shown use the <strong>final/lowest rate</strong> only.
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown(make_table(step3, show_step_col=True), unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    output_json = []
-    for month in months_order:
-        mdf   = df[df["Month"] == month]
-        bonds = mdf[show_cols].copy()
-        bonds["Maturity Date"] = bonds["Maturity Date"].dt.strftime("%Y-%m-%d")
-        output_json.append({
-            "Month": month,
-            "TotalCoupon": round(mdf["Coupon Payment"].sum(), 2),
-            "Bonds": bonds.to_dict(orient="records")
-        })
+    xlsx = build_excel(results)
     st.download_button(
-        label="⬇  Export Portfolio JSON",
-        data=json.dumps(output_json, indent=2, default=str),
-        file_name="bond_portfolio_schedule.json",
-        mime="application/json"
+        label="⬇  Download Complete Excel",
+        data=xlsx,
+        file_name="T_Bonds_Calculated.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
 
-def extract_bonds_from_pdf(pdf_bytes: bytes):
-    api_key = (
-        st.secrets.get("GEMINI_API_KEY")
-        or os.environ.get("GEMINI_API_KEY")
-        or os.environ.get("GOOGLE_API_KEY")
-    )
-    if not api_key:
-        raise ValueError("No Gemini API key found. Set GEMINI_API_KEY in Streamlit Secrets or your environment.")
+# ─── MAIN UI ──────────────────────────────────────────────────────────────────
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
-
-    prompt = """You are a financial data extraction specialist working for a Treasury department.
-Analyze this document and extract ALL bond / fixed-income instrument records.
-
-Return ONLY a valid JSON array (no markdown fences, no preamble) where each object has exactly these keys:
-  "ISIN"           — string, the ISIN or instrument identifier
-  "Maturity Date"  — string in YYYY-MM-DD format
-  "Coupon Payment" — number, the coupon payment amount (plain number, no currency symbols or commas)
-
-Rules:
-- If coupon payment amounts are not shown but coupon rates are, set "Coupon Payment" to 0 and note the rate in a separate "Note" key.
-- If a required field is absent, use null.
-- Do NOT include any text outside the JSON array.
-
-Example output:
-[
-  {"ISIN": "LKB00012L025", "Maturity Date": "2025-07-01", "Coupon Payment": 5000000},
-  {"ISIN": "LKB00015L026", "Maturity Date": "2026-01-15", "Coupon Payment": 3750000}
-]"""
-
-    response = model.generate_content(
-        [prompt, {"mime_type": "application/pdf", "data": pdf_bytes}]
-    )
-
-    raw = response.text.strip()
-    if raw.startswith("```"):
-        raw = "\n".join(raw.split("\n")[1:])
-    if raw.endswith("```"):
-        raw = "\n".join(raw.split("\n")[:-1])
-
-    bonds = json.loads(raw.strip())
-    return bonds, raw
-
-
-# ── Page Header ───────────────────────────────────────────────────────────────
 st.markdown(f"""
-<div class="treasury-header">
-    <div class="subtitle">Central Bank of Sri Lanka · Fixed Income Operations</div>
-    <h1>Bond Maturity &amp; Coupon Dashboard</h1>
-    <div class="timestamp">Generated {datetime.now().strftime('%d %B %Y  ·  %H:%M')} (Colombo Time)</div>
+<div class="page-header">
+  <div class="sub">Central Bank of Sri Lanka · Fixed Income Operations</div>
+  <h1>Treasury Bond Calculator</h1>
+  <div class="ts">Upload a file with Maturity Date, ISIN, Series, Face Value → all other columns calculated automatically</div>
 </div>
 """, unsafe_allow_html=True)
 
-# ── Upload Tabs ───────────────────────────────────────────────────────────────
-tab_csv, tab_pdf = st.tabs(["📊  CSV Upload", "📄  PDF Upload"])
+tab_xl, tab_csv, tab_pdf = st.tabs(["📊  Excel Upload", "📋  CSV Upload", "📄  PDF Upload"])
 
-# ════════════════════════════════════════════════════════════════════
-# TAB 1 — CSV
-# ════════════════════════════════════════════════════════════════════
-with tab_csv:
-    csv_file = st.file_uploader(
-        "Upload bond portfolio CSV",
-        type=["csv"],
-        label_visibility="collapsed",
-        key="csv_uploader"
-    )
-    st.caption("Required columns: **ISIN**, **Maturity Date**, **Coupon Payment** (or Semiannual Coupon Payment)")
+def handle_df(df):
+    """Process a dataframe into results."""
+    results = []
+    for _, row in df.iterrows():
+        try:
+            r = process_row(row.to_dict())
+            results.append(r)
+        except Exception as e:
+            st.warning(f"Skipped a row due to error: {e}")
+    return results
 
-    if csv_file:
-        df_raw = pd.read_csv(csv_file)
-        df, err = clean_df(df_raw)
-        if err:
-            st.markdown(f'<div class="warn-box">⚠ {err}</div>', unsafe_allow_html=True)
+with tab_xl:
+    xl_file = st.file_uploader("Upload Excel file", type=["xlsx","xls"],
+                                label_visibility="collapsed", key="xl_up")
+    st.caption("Required columns: **Maturity Date**, **ISIN**, **Series**, **Face Value (Rs Mn)** · Extra columns/headers are ignored automatically")
+    if xl_file:
+        df, status = parse_uploaded_file(xl_file)
+        if status == "ok" and df is not None:
+            results = handle_df(df)
+            if results:
+                render_dashboard(results)
+            else:
+                st.markdown('<div class="warn-box">⚠ No valid bond rows found. Check column names.</div>', unsafe_allow_html=True)
         else:
-            render_dashboard(df, source_label="CSV")
+            st.markdown(f'<div class="warn-box">⚠ Could not parse file: {status}</div>', unsafe_allow_html=True)
 
-# ════════════════════════════════════════════════════════════════════
-# TAB 2 — PDF
-# ════════════════════════════════════════════════════════════════════
+with tab_csv:
+    csv_file = st.file_uploader("Upload CSV file", type=["csv"],
+                                 label_visibility="collapsed", key="csv_up")
+    st.caption("Required columns: **Maturity Date**, **ISIN**, **Series**, **Face Value (Rs Mn)** · Extra columns/headers are ignored automatically")
+    if csv_file:
+        df, status = parse_uploaded_file(csv_file)
+        if status == "ok" and df is not None:
+            results = handle_df(df)
+            if results:
+                render_dashboard(results)
+            else:
+                st.markdown('<div class="warn-box">⚠ No valid bond rows found. Check column names.</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="warn-box">⚠ Could not parse file: {status}</div>', unsafe_allow_html=True)
+
 with tab_pdf:
     st.markdown("""
-    <div class="ai-banner" style="margin-bottom:1rem">
-      <span class="icon">🤖</span>
-      <span>Gemini AI reads your PDF and automatically extracts bond data —
-      works with settlement schedules, prospectuses, term sheets, and registry exports.</span>
+    <div style="background:#0a1610;border:1px solid #1a3020;border-left:3px solid #A8D5A2;
+    border-radius:6px;padding:.9rem 1.2rem;margin-bottom:1rem;font-size:.83rem;color:#A8D5A2">
+      📄 &nbsp; Extract bond data from PDF tables automatically —
+      works with settlement schedules, bond registers, Central Bank circulars, and term sheets.
     </div>
     """, unsafe_allow_html=True)
-
-    pdf_file = st.file_uploader(
-        "Upload bond document PDF",
-        type=["pdf"],
-        label_visibility="collapsed",
-        key="pdf_uploader"
-    )
-    st.caption("Supports: settlement schedules, bond registers, prospectuses, term sheets, Treasury circulars")
-
+    pdf_file = st.file_uploader("Upload PDF", type=["pdf"],
+                                 label_visibility="collapsed", key="pdf_up")
+    st.caption("Extracts Maturity Date, ISIN, Series, and Face Value from PDF tables")
     if pdf_file:
-        pdf_bytes = pdf_file.read()
-        cache_key = f"pdf_extract_{pdf_file.name}_{len(pdf_bytes)}"
-
+        cache_key = f"pdf_{pdf_file.name}_{pdf_file.size}"
         if cache_key not in st.session_state:
-            with st.spinner("Analysing PDF with AI — this may take a moment…"):
+            with st.spinner("Extracting bond data from PDF…"):
                 try:
-                    bonds_list, raw_json = extract_bonds_from_pdf(pdf_bytes)
-                    st.session_state[cache_key] = (bonds_list, raw_json, None)
-                except json.JSONDecodeError as e:
-                    st.session_state[cache_key] = (None, None, f"Could not parse AI response as JSON: {e}")
+                    bonds = extract_pdf_directly(pdf_file.read())
+                    st.session_state[cache_key] = (bonds, None)
                 except Exception as e:
-                    st.session_state[cache_key] = (None, None, str(e))
-
-        bonds_list, raw_json, error = st.session_state[cache_key]
-
-        if error:
-            st.markdown(f'<div class="warn-box">⚠ Extraction error: {error}<br>Try a cleaner PDF or switch to CSV upload.</div>', unsafe_allow_html=True)
-        elif not bonds_list:
-            st.markdown('<div class="warn-box">⚠ No bond data found in this PDF. Check the document contains structured bond/instrument data.</div>', unsafe_allow_html=True)
+                    st.session_state[cache_key] = (None, str(e))
+        bonds, err = st.session_state[cache_key]
+        if err:
+            st.markdown(f'<div class="warn-box">⚠ Extraction error: {err}</div>', unsafe_allow_html=True)
+        elif bonds:
+            df_pdf = pd.DataFrame(bonds)
+            results = handle_df(df_pdf)
+            if results:
+                st.success(f"✓ Extracted {len(results)} bonds from PDF")
+                render_dashboard(results)
         else:
-            df_pdf = pd.DataFrame(bonds_list)
+            st.markdown('<div class="warn-box">⚠ No bond data found in PDF.</div>', unsafe_allow_html=True)
 
-            # Normalise column names
-            rename_map = {}
-            for col in df_pdf.columns:
-                cl = col.lower()
-                if "isin" in cl:
-                    rename_map[col] = "ISIN"
-                elif "maturity" in cl or ("date" in cl and "maturity" in cl):
-                    rename_map[col] = "Maturity Date"
-                elif "coupon" in cl or "payment" in cl:
-                    rename_map[col] = "Coupon Payment"
-            df_pdf.rename(columns=rename_map, inplace=True)
-
-            # Fallback: if "Maturity Date" still missing, look for any date-ish column
-            if "Maturity Date" not in df_pdf.columns:
-                for col in df_pdf.columns:
-                    if "date" in col.lower():
-                        df_pdf.rename(columns={col: "Maturity Date"}, inplace=True)
-                        break
-
-            df_pdf, err = clean_df(df_pdf)
-            if err:
-                st.markdown(f'<div class="warn-box">⚠ {err}<br>Raw AI output shown below for debugging.</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="extraction-preview">{raw_json}</div>', unsafe_allow_html=True)
-            else:
-                render_dashboard(df_pdf, source_label="PDF")
-                with st.expander("🔍 View raw AI extraction output"):
-                    st.markdown(f'<div class="extraction-preview">{raw_json}</div>', unsafe_allow_html=True)
-
-# ── Empty state ───────────────────────────────────────────────────────────────
-csv_active = st.session_state.get("csv_uploader") is not None
-pdf_active = st.session_state.get("pdf_uploader") is not None
-if not csv_active and not pdf_active:
+if not (tab_xl or tab_csv or tab_pdf):
     st.markdown("""
-    <div class="info-box" style="margin-top:1.5rem">
-      <div class="icon">🏛️</div>
-      <p>Upload a <strong>CSV</strong> or <strong>PDF</strong> bond document above<br>to generate the coupon schedule dashboard.</p>
+    <div class="info-box" style="margin-top:2rem">
+      <div class="ico">🏛️</div>
+      <p>Upload an <strong>Excel</strong>, <strong>CSV</strong>, or <strong>PDF</strong> file above<br>
+      with Maturity Date · ISIN · Series · Face Value</p>
     </div>
     """, unsafe_allow_html=True)
