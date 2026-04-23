@@ -5,7 +5,6 @@ import pandas as pd
 import numpy as np
 import io
 import re
-import json
 from datetime import date, datetime
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -14,115 +13,315 @@ from openpyxl.utils import get_column_letter
 # ─── CSS ──────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
 
-html, body, [class*="css"] { font-family: 'Outfit', sans-serif; background:#09100F; color:#D4E5D0; }
-.stApp { background: radial-gradient(ellipse at 20% 0%, #0f1e14 0%, #09100F 55%, #060d0b 100%); }
+html, body, [class*="css"] {
+  font-family: 'DM Sans', sans-serif;
+  background: #F5F1EB !important;
+  color: #1C2B1E !important;
+}
+.stApp {
+  background: linear-gradient(160deg, #F5F1EB 0%, #EDE8DF 60%, #E8E2D6 100%) !important;
+}
+/* Override Streamlit defaults */
+.st-* { background-color: transparent !important; }
+[data-testid="stForm"] { background: #FFFFFF !important; border: 1px solid #D4CCC0 !important; }
+
 #MainMenu, footer, header { visibility: hidden; }
-.block-container { padding-top:2rem; padding-bottom:3rem; max-width:1400px; }
+.block-container { padding-top: 2rem; padding-bottom: 3rem; max-width: 1440px; }
 
-.page-header { border-bottom:1px solid #2A4A3044; padding-bottom:1.5rem; margin-bottom:2.5rem; }
-.page-header h1 { font-family:'Cormorant Garamond',serif; font-size:2.6rem; font-weight:700;
-  color:#A8D5A2; letter-spacing:.01em; margin:0; line-height:1.1; }
-.page-header .sub { font-size:.8rem; color:#3D6B45; letter-spacing:.18em;
-  text-transform:uppercase; margin-top:.4rem; }
-.page-header .ts { font-family:'JetBrains Mono',monospace; font-size:.75rem;
-  color:#2A4A30; margin-top:.25rem; }
+/* ── PAGE HEADER ── */
+.page-header {
+  border-bottom: 2px solid #2A4A30;
+  padding-bottom: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+.page-header .sub {
+  font-size: .72rem;
+  color: #7A8C7E;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  margin-bottom: .4rem;
+}
+.page-header h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1C2B1E;
+  margin: 0;
+  line-height: 1.15;
+}
+.page-header .ts {
+  font-family: 'DM Mono', monospace;
+  font-size: .72rem;
+  color: #7A8C7E;
+  margin-top: .5rem;
+}
 
-/* tabs */
-.stTabs [data-baseweb="tab-list"] { background:#0d1a10; border-radius:8px 8px 0 0;
-  border:1px solid #1a3020; border-bottom:none; gap:0; }
-.stTabs [data-baseweb="tab"] { font-family:'JetBrains Mono',monospace !important;
-  font-size:.76rem !important; letter-spacing:.12em !important; text-transform:uppercase !important;
-  color:#3D6B45 !important; padding:.7rem 1.5rem !important; }
-.stTabs [aria-selected="true"] { color:#A8D5A2 !important;
-  border-bottom:2px solid #A8D5A2 !important; background:transparent !important; }
-.stTabs [data-baseweb="tab-panel"] { background:#0d1a10; border:1px solid #1a3020;
-  border-top:none; border-radius:0 0 8px 8px; padding:1.2rem; }
+/* ── TABS ── */
+.stTabs [data-baseweb="tab-list"] {
+  background: #F9F6F0 !important;
+  border-radius: 6px 6px 0 0;
+  border: 1px solid #C8BFB0;
+  border-bottom: none;
+  gap: 0;
+}
+.stTabs [data-baseweb="tab"] {
+  font-family: 'DM Mono', monospace !important;
+  font-size: .73rem !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+  color: #7A8C7E !important;
+  padding: .75rem 1.6rem !important;
+  background: #F9F6F0 !important;
+}
+.stTabs [aria-selected="true"] {
+  color: #1C2B1E !important;
+  border-bottom: 2px solid #2A4A30 !important;
+  background: #FFFFFF !important;
+}
+.stTabs [data-baseweb="tab-panel"] {
+  background: #FFFFFF !important;
+  border: 1px solid #C8BFB0;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  padding: 1.5rem;
+}
 
-/* upload */
-[data-testid="stFileUploader"] { background:#070f09; border:1px dashed #2A4A3066;
-  border-radius:6px; padding:.5rem; }
-[data-testid="stFileUploader"]:hover { border-color:#A8D5A288; }
-[data-testid="stFileUploaderDropzone"] p { color:#3D6B45; }
+/* ── FILE UPLOADER ── */
+[data-testid="stFileUploader"] {
+  background: #FFFFFF !important;
+  border: 1.5px dashed #B0A898;
+  border-radius: 6px;
+  padding: .5rem;
+}
+[data-testid="stFileUploader"]:hover { border-color: #2A4A30; }
+[data-testid="stFileUploaderDropzone"] { background: #F9F6F0 !important; }
+[data-testid="stFileUploaderDropzone"] p { color: #7A8C7E; }
 
-/* metrics */
-.metric-row { display:flex; gap:1.2rem; margin-bottom:2.5rem; flex-wrap:wrap; }
-.mc { flex:1; min-width:160px; background:linear-gradient(135deg,#0f1e14,#0d1a10);
-  border:1px solid #1a3020; border-top:2px solid #A8D5A2; border-radius:8px;
-  padding:1.2rem 1.5rem; }
-.mc.warn { border-top-color:#E8A44A; }
-.mc.danger { border-top-color:#E85A4A; }
-.mc .lbl { font-size:.7rem; font-weight:500; letter-spacing:.16em; text-transform:uppercase;
-  color:#3D6B45; margin-bottom:.5rem; }
-.mc .val { font-family:'JetBrains Mono',monospace; font-size:1.55rem; font-weight:500;
-  color:#A8D5A2; line-height:1; }
-.mc.warn .val { color:#E8A44A; }
-.mc.danger .val { color:#E85A4A; }
-.mc .sub { font-size:.73rem; color:#2A4A30; margin-top:.4rem; }
+/* ── METRICS ── */
+.metric-row { display: flex; gap: 1.2rem; margin-bottom: 2.5rem; flex-wrap: wrap; }
+.mc {
+  flex: 1; min-width: 160px;
+  background: #FFFFFF;
+  border: 1px solid #D4CCBf;
+  border-top: 3px solid #2A4A30;
+  border-radius: 6px;
+  padding: 1.2rem 1.5rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+.mc.warn { border-top-color: #C47B1A; }
+.mc.danger { border-top-color: #C43B2A; }
+.mc .lbl {
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #7A8C7E;
+  margin-bottom: .5rem;
+}
+.mc .val {
+  font-family: 'DM Mono', monospace;
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: #1C2B1E;
+  line-height: 1;
+}
+.mc.warn .val { color: #C47B1A; }
+.mc.danger .val { color: #C43B2A; }
+.mc .sub { font-size: .72rem; color: #A09890; margin-top: .4rem; }
 
-.sec-title { font-family:'Cormorant Garamond',serif; font-size:1.2rem; color:#A8D5A2;
-  letter-spacing:.04em; margin-bottom:1rem; padding-bottom:.5rem;
-  border-bottom:1px solid #1a3020; }
+/* ── SECTION TITLE ── */
+.sec-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.15rem;
+  color: #1C2B1E;
+  letter-spacing: .02em;
+  margin-bottom: 1rem;
+  padding-bottom: .5rem;
+  border-bottom: 1px solid #C8BFB0;
+}
 
-/* badge */
-.badge { display:inline-block; font-family:'JetBrains Mono',monospace; font-size:.68rem;
-  padding:.18rem .6rem; border-radius:3px; font-weight:500; letter-spacing:.06em; }
-.bg { background:#A8D5A222; color:#A8D5A2; border:1px solid #A8D5A244; }
-.bw { background:#E8A44A22; color:#E8A44A; border:1px solid #E8A44A44; }
-.br { background:#E85A4A22; color:#E85A4A; border:1px solid #E85A4A44; }
-.bb { background:#5A9BD422; color:#93C5FD; border:1px solid #5A9BD444; }
+/* ── BADGE ── */
+.badge {
+  display: inline-block;
+  font-family: 'DM Mono', monospace;
+  font-size: .66rem;
+  padding: .18rem .6rem;
+  border-radius: 3px;
+  font-weight: 500;
+  letter-spacing: .06em;
+}
+.bg  { background: #E8F0E8; color: #2A4A30; border: 1px solid #B8D4B8; }
+.bw  { background: #FEF3E2; color: #C47B1A; border: 1px solid #F5D89A; }
+.br  { background: #FEEBEA; color: #C43B2A; border: 1px solid #F5B8B4; }
+.bb  { background: #E8F0F8; color: #2A5090; border: 1px solid #B4CDE8; }
 
-/* table */
-.tbl-wrap { border-radius:6px; overflow:hidden; border:1px solid #1a3020; margin-bottom:.5rem; }
-.tbl { width:100%; border-collapse:collapse; font-size:.84rem; }
-.tbl thead th { background:#0a1610; color:#3D6B45; font-size:.66rem; font-weight:500;
-  letter-spacing:.16em; text-transform:uppercase; padding:.65rem 1rem;
-  text-align:left; border-bottom:1px solid #1a3020; }
-.tbl thead th.num { text-align:right; }
-.tbl tbody tr { border-bottom:1px solid #0f1e14; transition:background .15s; }
-.tbl tbody tr:last-child { border-bottom:none; }
-.tbl tbody tr:hover { background:#0f1e14; }
-.tbl tbody td { padding:.65rem 1rem; color:#B8D4B4; }
-.tbl tbody td.mono { font-family:'JetBrains Mono',monospace; font-size:.8rem; color:#93C5FD; }
-.tbl tbody td.dt { font-family:'JetBrains Mono',monospace; font-size:.8rem; color:#7A9B80; }
-.tbl tbody td.amt { font-family:'JetBrains Mono',monospace; text-align:right; color:#A8D5A2; }
-.tbl tbody td.warn { color:#E8A44A; font-family:'JetBrains Mono',monospace; }
-.tbl tfoot tr { background:#0a1610; border-top:1px solid #A8D5A233; }
-.tbl tfoot td { padding:.7rem 1rem; font-family:'JetBrains Mono',monospace;
-  font-size:.82rem; font-weight:500; color:#A8D5A2; letter-spacing:.08em; }
-.tbl tfoot td.ta { text-align:right; font-size:.92rem; }
+/* ── TABLE ── */
+.tbl-wrap {
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #D4CCC0;
+  margin-bottom: .5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+.tbl { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.tbl thead th {
+  background: #2A4A30;
+  color: #D4E8D4;
+  font-size: .66rem;
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  padding: .7rem 1rem;
+  text-align: left;
+}
+.tbl thead th.num { text-align: right; }
+.tbl tbody tr { border-bottom: 1px solid #EDE8DF; transition: background .12s; }
+.tbl tbody tr:last-child { border-bottom: none; }
+.tbl tbody tr:hover { background: #F0EBE0; }
+.tbl tbody td { padding: .65rem 1rem; color: #1C2B1E; }
+.tbl tbody td.mono {
+  font-family: 'DM Mono', monospace;
+  font-size: .8rem;
+  color: #2A5090;
+}
+.tbl tbody td.dt {
+  font-family: 'DM Mono', monospace;
+  font-size: .8rem;
+  color: #5A7A5E;
+}
+.tbl tbody td.amt {
+  font-family: 'DM Mono', monospace;
+  text-align: right;
+  color: #1C2B1E;
+}
+.tbl tbody td.warn {
+  color: #C47B1A;
+  font-family: 'DM Mono', monospace;
+}
+.tbl tfoot tr {
+  background: #EDE8DF;
+  border-top: 1.5px solid #2A4A30;
+}
+.tbl tfoot td {
+  padding: .7rem 1rem;
+  font-family: 'DM Mono', monospace;
+  font-size: .82rem;
+  font-weight: 600;
+  color: #1C2B1E;
+  letter-spacing: .06em;
+}
+.tbl tfoot td.ta { text-align: right; font-size: .9rem; }
 
-.info-box { background:#0d1a10; border:1px dashed #1a3020; border-radius:8px;
-  padding:3rem 2rem; text-align:center; color:#1E3B25; }
-.info-box .ico { font-size:2.5rem; margin-bottom:1rem; }
-.info-box p { margin:0; font-size:.9rem; letter-spacing:.05em; }
+/* ── EXPANDER ── */
+[data-testid="stExpander"] {
+  background: #FFFFFF !important;
+  border: 1px solid #D4CCC0 !important;
+  border-radius: 6px !important;
+  margin-bottom: .6rem !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04) !important;
+}
+[data-testid="stExpander"] summary {
+  font-family: 'DM Sans', sans-serif !important;
+  font-weight: 600 !important;
+  font-size: .88rem !important;
+  color: #1C2B1E !important;
+  letter-spacing: .04em !important;
+  text-transform: uppercase !important;
+  padding: .9rem 1.2rem !important;
+  background: #F9F6F0 !important;
+}
+[data-testid="stExpander"] summary:hover { 
+  color: #2A4A30 !important; 
+  background: #EDE8DF !important;
+}
+[data-testid="stExpander"] [role="region"] {
+  background: #FFFFFF !important;
+}
 
-.warn-box { background:#1a1208; border:1px solid #92400e44;
-  border-left:3px solid #E8A44A; border-radius:6px; padding:.9rem 1.2rem;
-  font-size:.83rem; color:#FCD34D; margin:.8rem 0; }
-.step-banner { background:#1a1008; border:1px solid #E85A4A44;
-  border-left:3px solid #E85A4A; border-radius:6px; padding:1rem 1.2rem;
-  margin:1rem 0; font-size:.83rem; color:#FCA5A5; }
-.step-banner strong { color:#E85A4A; }
+/* ── BUTTONS ── */
+.stDownloadButton button {
+  background: #2A4A30 !important;
+  border: none !important;
+  color: #F5F1EB !important;
+  font-family: 'DM Mono', monospace !important;
+  font-size: .76rem !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+  border-radius: 4px !important;
+  padding: .55rem 1.4rem !important;
+}
+.stDownloadButton button:hover { background: #1C3320 !important; }
 
-.grp-lbl { font-size:.68rem; letter-spacing:.18em; text-transform:uppercase;
-  color:#3D6B45; margin:1rem 0 .5rem 0; display:flex; align-items:center; gap:.5rem; }
-.grp-lbl::after { content:''; flex:1; height:1px; background:#1a3020; }
+/* Override any Streamlit dark defaults for text inputs and select boxes */
+input, select, textarea {
+  background: #FFFFFF !important;
+  color: #1C2B1E !important;
+  border: 1px solid #D4CCC0 !important;
+}
+input:focus, select:focus, textarea:focus {
+  background: #FFFFFF !important;
+  color: #1C2B1E !important;
+  border-color: #2A4A30 !important;
+}
 
-[data-testid="stExpander"] { background:#0d1a10 !important; border:1px solid #1a3020 !important;
-  border-radius:8px !important; margin-bottom:.7rem !important; }
-[data-testid="stExpander"] summary { font-family:'Outfit',sans-serif; font-weight:500;
-  font-size:.92rem; color:#8BB888 !important; letter-spacing:.06em;
-  text-transform:uppercase; padding:.85rem 1.2rem !important; }
-[data-testid="stExpander"] summary:hover { color:#A8D5A2 !important; }
+/* ── INFO / WARN BOXES ── */
+.info-box {
+  background: #FFFFFF;
+  border: 1.5px dashed #C8BFB0;
+  border-radius: 8px;
+  padding: 3rem 2rem;
+  text-align: center;
+  color: #A09890;
+}
+.info-box .ico { font-size: 2.5rem; margin-bottom: 1rem; }
+.info-box p { margin: 0; font-size: .9rem; letter-spacing: .04em; }
 
-.stDownloadButton button { background:transparent !important;
-  border:1px solid #A8D5A266 !important; color:#A8D5A2 !important;
-  font-family:'JetBrains Mono',monospace !important; font-size:.76rem !important;
-  letter-spacing:.12em !important; text-transform:uppercase !important;
-  border-radius:4px !important; padding:.5rem 1.2rem !important; }
-.stDownloadButton button:hover { background:#A8D5A211 !important; border-color:#A8D5A2AA !important; }
+.warn-box {
+  background: #FEF8EE;
+  border: 1px solid #F5D89A;
+  border-left: 3px solid #C47B1A;
+  border-radius: 5px;
+  padding: .85rem 1.2rem;
+  font-size: .83rem;
+  color: #7A4E10;
+  margin: .8rem 0;
+}
+.step-banner {
+  background: #FEF8EE;
+  border: 1px solid #F5D89A;
+  border-left: 3px solid #C47B1A;
+  border-radius: 5px;
+  padding: 1rem 1.2rem;
+  margin: 1rem 0;
+  font-size: .83rem;
+  color: #7A4E10;
+}
+.step-banner strong { color: #C47B1A; }
+
+.grp-lbl {
+  font-size: .68rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #7A8C7E;
+  margin: 1rem 0 .5rem 0;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.grp-lbl::after { content: ''; flex: 1; height: 1px; background: #D4CCC0; }
+
+/* view tabs within dashboard */
+.view-tab-row { display:flex; gap:.5rem; margin-bottom:1.5rem; }
+.view-tab-btn {
+  font-family:'DM Mono',monospace; font-size:.73rem; letter-spacing:.1em;
+  text-transform:uppercase; padding:.5rem 1.2rem; border-radius:4px; cursor:pointer;
+  border:1px solid #C8BFB0; background:#FFFFFF; color:#7A8C7E; transition:all .15s;
+}
+.view-tab-btn.active {
+  background:#2A4A30; color:#F5F1EB; border-color:#2A4A30;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -134,17 +333,11 @@ MAY_BASE = date(2026, 5, 1)
 
 
 def parse_series(series: str):
-    """
-    Return (bond_type, rates_list) where bond_type is 'normal','step2','step3'
-    and rates_list is list of floats (e.g. [0.09] or [0.12, 0.09] or [0.12,0.09,0.07])
-    """
     series = str(series).strip()
     pcts = re.findall(r'(\d{1,2}\.\d{2})%', series)
     if not pcts:
         pcts = re.findall(r'(\d{1,2}(?:\.\d+)?)%', series)
-
     rates = [float(p) / 100 for p in pcts]
-
     if len(rates) == 0:
         return 'normal', [0.0]
     elif len(rates) == 1:
@@ -156,24 +349,14 @@ def parse_series(series: str):
 
 
 def calc_remaining_coupons(maturity: date) -> float:
-    """Validated formula: months from Apr/May 2026 base to maturity ÷ 6"""
     base = APR_BASE if maturity.day >= 15 else MAY_BASE
     months = (maturity.year - base.year) * 12 + (maturity.month - base.month)
     return round(months / 6, 2)
 
 
-def calc_coupon_rate_from_series(series: str) -> float:
-    """Extract current (final/active) coupon rate from series string."""
-    bond_type, rates = parse_series(series)
-    return rates[-1] if rates else 0.0
-
-
 def process_row(row: dict) -> dict:
-    """
-    Given a row with Maturity Date, ISIN, Series, Face Value,
-    calculate all derived columns.
-    """
     mat_raw = row.get('Maturity Date')
+    mat = None
     if isinstance(mat_raw, str):
         for fmt in ['%d-%b-%y', '%d-%b-%Y', '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y']:
             try:
@@ -181,9 +364,7 @@ def process_row(row: dict) -> dict:
                 break
             except:
                 pass
-        else:
-            mat = None
-    elif isinstance(mat_raw, (datetime,)):
+    elif isinstance(mat_raw, datetime):
         mat = mat_raw.date()
     elif isinstance(mat_raw, date):
         mat = mat_raw
@@ -192,8 +373,6 @@ def process_row(row: dict) -> dict:
             mat = pd.to_datetime(mat_raw).date()
         except:
             mat = None
-    else:
-        mat = None
 
     series = str(row.get('Series', ''))
     face   = float(str(row.get('Face Value (Rs Mn)', 0)).replace(',', '')) if pd.notna(row.get('Face Value (Rs Mn)')) else 0.0
@@ -219,7 +398,6 @@ def process_row(row: dict) -> dict:
         'Current Rate':               current_rate,
         'Remaining Coupons':          remaining,
         'Semiannual Coupon Payment':  semi_coupon,
-        'Total Payment Until Maturity': total_pay,
         'Bond Type':                  bond_type,
         'All Rates':                  rates,
         '_mat':                       mat,
@@ -227,10 +405,6 @@ def process_row(row: dict) -> dict:
 
 
 def parse_uploaded_file(uploaded_file):
-    """
-    Robustly parse Excel, CSV with potential header noise.
-    Finds the row containing the 4 key columns and reads from there.
-    """
     name = uploaded_file.name.lower()
     raw_bytes = uploaded_file.read()
 
@@ -247,21 +421,12 @@ def parse_uploaded_file(uploaded_file):
     if name.endswith('.csv'):
         df_raw = pd.read_csv(io.BytesIO(raw_bytes), header=None)
         hrow   = find_header_row(df_raw)
-        if hrow is not None:
-            df = pd.read_csv(io.BytesIO(raw_bytes), skiprows=hrow)
-        else:
-            df = pd.read_csv(io.BytesIO(raw_bytes))
+        df     = pd.read_csv(io.BytesIO(raw_bytes), skiprows=hrow) if hrow is not None else pd.read_csv(io.BytesIO(raw_bytes))
 
     elif name.endswith(('.xlsx', '.xls')):
         df_raw = pd.read_excel(io.BytesIO(raw_bytes), header=None)
         hrow   = find_header_row(df_raw)
-        if hrow is not None:
-            df = pd.read_excel(io.BytesIO(raw_bytes), skiprows=hrow)
-        else:
-            df = pd.read_excel(io.BytesIO(raw_bytes))
-
-    elif name.endswith('.pdf'):
-        return None, "pdf"
+        df     = pd.read_excel(io.BytesIO(raw_bytes), skiprows=hrow) if hrow is not None else pd.read_excel(io.BytesIO(raw_bytes))
     else:
         return None, "unsupported"
 
@@ -278,11 +443,11 @@ def parse_uploaded_file(uploaded_file):
             target = 'Series'
         elif 'face' in cl or ('value' in cl and 'face' in cl):
             target = 'Face Value (Rs Mn)'
-        
+
         if target and target not in mapped_targets:
             col_map[col] = target
             mapped_targets.add(target)
-    
+
     df.rename(columns=col_map, inplace=True)
 
     if 'Maturity Date' in df.columns:
@@ -293,119 +458,30 @@ def parse_uploaded_file(uploaded_file):
     return df, "ok"
 
 
-def extract_pdf_directly(pdf_bytes: bytes):
-    """Extract bond data directly from PDF using pdfplumber (no AI needed)."""
-    import pdfplumber
-    import io
-    
-    records = []
-    
-    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        for page in pdf.pages:
-            # Try to extract tables from the page
-            tables = page.extract_tables()
-            
-            if not tables:
-                continue
-            
-            for table in tables:
-                if not table:
-                    continue
-                
-                # Find header row by looking for key column names
-                header_row_idx = None
-                for idx, row in enumerate(table):
-                    row_lower = [str(cell).lower().strip() if cell else '' for cell in row]
-                    if any('maturity' in cell for cell in row_lower) and \
-                       any('isin' in cell for cell in row_lower):
-                        header_row_idx = idx
-                        break
-                
-                if header_row_idx is None:
-                    # Try to infer header as first row if it looks like headers
-                    if table[0]:
-                        header_row_idx = 0
-                    else:
-                        continue
-                
-                # Map column indices to our required fields
-                header = table[header_row_idx]
-                col_map = {}
-                
-                for col_idx, cell in enumerate(header):
-                    if cell is None:
-                        continue
-                    cell_lower = str(cell).lower().strip()
-                    
-                    if 'maturity' in cell_lower or ('date' in cell_lower and 'mat' in cell_lower):
-                        col_map['maturity_date'] = col_idx
-                    elif 'isin' in cell_lower:
-                        col_map['isin'] = col_idx
-                    elif 'series' in cell_lower:
-                        col_map['series'] = col_idx
-                    elif 'face' in cell_lower or ('value' in cell_lower and 'face' in cell_lower):
-                        col_map['face_value'] = col_idx
-                
-                # Extract data rows (skip header and empty rows)
-                for row_idx in range(header_row_idx + 1, len(table)):
-                    row = table[row_idx]
-                    
-                    # Skip empty or incomplete rows
-                    if not row or all(cell is None or str(cell).strip() == '' for cell in row):
-                        continue
-                    
-                    # Try to extract required fields
-                    try:
-                        record = {}
-                        
-                        if 'maturity_date' in col_map:
-                            record['Maturity Date'] = row[col_map['maturity_date']]
-                        if 'isin' in col_map:
-                            record['ISIN'] = row[col_map['isin']]
-                        if 'series' in col_map:
-                            record['Series'] = row[col_map['series']]
-                        if 'face_value' in col_map:
-                            fv = row[col_map['face_value']]
-                            # Clean up face value (remove commas, convert to float)
-                            if fv:
-                                fv_str = str(fv).replace(',', '').strip()
-                                try:
-                                    record['Face Value (Rs Mn)'] = float(fv_str)
-                                except:
-                                    record['Face Value (Rs Mn)'] = fv
-                        
-                        # Only add if we have at least Maturity Date
-                        if 'Maturity Date' in record and record['Maturity Date']:
-                            records.append(record)
-                    except Exception as e:
-                        continue
-    
-    return records
-
-
 # ─── EXCEL EXPORT ─────────────────────────────────────────────────────────────
 
 def build_excel(results: list) -> bytes:
-    wb  = Workbook()
+    wb = Workbook()
 
-    DARK  = "1A2E1A"
-    MID   = "2A4A30"
-    LIGHT = "A8D5A2"
-    WARN  = "E8A44A"
-    RED   = "E85A4A"
-    WHITE = "FFFFFF"
-    ALT1  = "0F1E14"
-    ALT2  = "0D1A10"
-    YBG   = "2A1F0A"
-    RBGC  = "2A0F0A"
+    HDR_BG   = "2A4A30"
+    HDR_FG   = "D4E8D4"
+    ALT1_BG  = "FFFFFF"
+    ALT2_BG  = "F5F1EB"
+    WARN_BG  = "FEF8EE"
+    WARN_FG  = "7A4E10"
+    ERR_BG   = "FEEBEA"
+    ERR_FG   = "7A2010"
+    TOT_BG   = "EDE8DF"
+    TOT_FG   = "1C2B1E"
+    HDR_TXT  = "1C2B1E"
 
-    def s(style='thin', color="2A4A30"):
+    def s(style='thin', color="C8BFB0"):
         return Side(style=style, color=color)
     def tb():
         return Border(left=s(), right=s(), top=s(), bottom=s())
     def mb():
-        return Border(left=s('medium', DARK), right=s('medium', DARK),
-                      top=s('medium', DARK), bottom=s('medium', DARK))
+        return Border(left=s('medium','2A4A30'), right=s('medium','2A4A30'),
+                      top=s('medium','2A4A30'), bottom=s('medium','2A4A30'))
 
     normal = [r for r in results if r['Bond Type'] == 'normal']
     step2  = [r for r in results if r['Bond Type'] == 'step2']
@@ -427,45 +503,43 @@ def build_excel(results: list) -> bytes:
         ws.merge_cells('A1:I1')
         c = ws['A1']
         c.value = f"Treasury Bonds Outstanding — As at 31 March 2026 ({sheet_name})"
-        c.font = Font(name='Arial', bold=True, size=12, color=LIGHT)
-        c.fill = PatternFill('solid', fgColor=DARK)
+        c.font = Font(name='Arial', bold=True, size=12, color=HDR_FG)
+        c.fill = PatternFill('solid', fgColor=HDR_BG)
         c.alignment = Alignment(horizontal='center', vertical='center')
         ws.row_dimensions[1].height = 26
 
         if sheet_name != "Normal Bonds" and (step2 or step3):
             ws.merge_cells('A2:I2')
             c = ws['A2']
-            stepped = [r for r in data if r['Bond Type'] != 'normal']
-            if stepped and sheet_name == "All Bonds":
-                c.value = (f"⚠  {len(step2)} two-step bond(s) and {len(step3)} three-step bond(s) flagged. "
-                           f"Calculations use current/final coupon rate only — verify step dates.")
-            elif sheet_name in ("2-Step Bonds", "3-Step Bonds"):
-                c.value = "⚠  Stepped coupon bonds — calculations use current/final rate only. Step dates required for full accuracy."
-            c.font = Font(name='Arial', size=9, color="FCD34D")
-            c.fill = PatternFill('solid', fgColor="1A1208")
+            c.value = "⚠  Stepped coupon bonds present — calculations use current/final rate only. Verify step dates."
+            c.font = Font(name='Arial', size=9, color=WARN_FG)
+            c.fill = PatternFill('solid', fgColor=WARN_BG)
             c.alignment = Alignment(horizontal='center', vertical='center')
             ws.row_dimensions[2].height = 18
             hdr_row = 3
         else:
             hdr_row = 2
 
-        headers = ["Maturity Date", "ISIN", "Series", "Face Value (Rs Mn)",
-                   "Coupon Rate", "Bond Type", "Remaining Coupons",
-                   "Semiannual Coupon Payment", "Total Payment Until Maturity"]
+        headers = ["Maturity Date","ISIN","Series","Face Value (Rs Mn)",
+                   "Coupon Rate","Bond Type","Remaining Coupons","Semiannual Coupon Payment"]
 
         ws.row_dimensions[hdr_row].height = 32
         for ci, h in enumerate(headers, 1):
             c = ws.cell(row=hdr_row, column=ci, value=h)
-            c.font = Font(name='Arial', bold=True, size=9, color=WHITE)
-            c.fill = PatternFill('solid', fgColor=MID)
+            c.font = Font(name='Arial', bold=True, size=9, color=HDR_FG)
+            c.fill = PatternFill('solid', fgColor=HDR_BG)
             c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
             c.border = tb()
 
         for ri, row in enumerate(data):
-            er  = ri + hdr_row + 1
-            bt  = row['Bond Type']
-            bg  = YBG if bt == 'step2' else (RBGC if bt == 'step3' else (ALT1 if ri % 2 == 0 else ALT2))
-            fc  = WARN if bt == 'step2' else (RED if bt == 'step3' else WHITE)
+            er = ri + hdr_row + 1
+            bt = row['Bond Type']
+            if bt == 'step2':
+                bg, fc = WARN_BG, WARN_FG
+            elif bt == 'step3':
+                bg, fc = ERR_BG, ERR_FG
+            else:
+                bg, fc = (ALT1_BG if ri % 2 == 0 else ALT2_BG), HDR_TXT
             fill = PatternFill('solid', fgColor=bg)
 
             vals = [
@@ -474,54 +548,45 @@ def build_excel(results: list) -> bytes:
                 {'normal':'Normal','step2':'2-Step ⚠','step3':'3-Step ⚠⚠'}.get(bt, bt),
                 row['Remaining Coupons'],
                 row['Semiannual Coupon Payment'],
-                row['Total Payment Until Maturity'],
             ]
             for ci, val in enumerate(vals, 1):
                 c = ws.cell(row=er, column=ci, value=val)
-                c.fill = fill
-                c.border = tb()
+                c.fill = fill; c.border = tb()
                 c.font = Font(name='Arial', size=9, color=fc)
                 if ci == 4:
-                    c.number_format = '#,##0.00'
-                    c.alignment = Alignment(horizontal='right')
+                    c.number_format = '#,##0.00'; c.alignment = Alignment(horizontal='right')
                 elif ci == 5:
                     c.alignment = Alignment(horizontal='center')
                 elif ci == 7:
-                    c.number_format = '0.00'
-                    c.alignment = Alignment(horizontal='center')
-                elif ci in (8, 9):
-                    c.number_format = '#,##0.000'
-                    c.alignment = Alignment(horizontal='right')
+                    c.number_format = '0.00'; c.alignment = Alignment(horizontal='center')
+                elif ci == 8:
+                    c.number_format = '#,##0.000'; c.alignment = Alignment(horizontal='right')
                 else:
                     c.alignment = Alignment(horizontal='center' if ci == 1 else 'left')
 
         tr = hdr_row + len(data) + 1
         ws.merge_cells(f'A{tr}:C{tr}')
         c = ws.cell(row=tr, column=1, value="TOTAL")
-        c.font = Font(name='Arial', bold=True, size=9, color=LIGHT)
-        c.fill = PatternFill('solid', fgColor=DARK)
+        c.font = Font(name='Arial', bold=True, size=9, color=TOT_FG)
+        c.fill = PatternFill('solid', fgColor=TOT_BG)
         c.alignment = Alignment(horizontal='center')
         c.border = mb()
-
-        for ci, col_idx in [(4, 4), (8, 8), (9, 9)]:
+        for ci, col_idx in [(4,4),(8,8)]:
             cl = get_column_letter(ci)
             c = ws.cell(row=tr, column=ci)
             c.value = f'=SUM({cl}{hdr_row+1}:{cl}{tr-1})'
-            c.font = Font(name='Arial', bold=True, size=9, color=LIGHT)
-            c.fill = PatternFill('solid', fgColor=DARK)
+            c.font = Font(name='Arial', bold=True, size=9, color=TOT_FG)
+            c.fill = PatternFill('solid', fgColor=TOT_BG)
             c.border = mb()
             c.alignment = Alignment(horizontal='right')
             c.number_format = '#,##0.00' if ci == 4 else '#,##0.000'
-
-        for ci in (5, 6, 7):
+        for ci in (5,6,7):
             c = ws.cell(row=tr, column=ci)
             c.value = ''
-            c.fill = PatternFill('solid', fgColor=DARK)
+            c.fill = PatternFill('solid', fgColor=TOT_BG)
             c.border = mb()
-
-        for ci, w in enumerate([13, 18, 24, 16, 20, 12, 14, 22, 24], 1):
+        for ci, w in enumerate([13,18,24,16,20,12,14,22,24], 1):
             ws.column_dimensions[get_column_letter(ci)].width = w
-
         ws.freeze_panes = f'A{hdr_row+1}'
 
     buf = io.BytesIO()
@@ -529,131 +594,93 @@ def build_excel(results: list) -> bytes:
     return buf.getvalue()
 
 
-# ─── DASHBOARD RENDER ─────────────────────────────────────────────────────────
+# ─── TABLE RENDER ─────────────────────────────────────────────────────────────
 
 def make_table(rows, show_step_col=False):
-    cols = ["ISIN", "Series", "Maturity Date", "Face Value (Rs Mn)",
-            "Coupon Rate", "Remaining Coupons", "Semiannual Coupon Payment",
-            "Total Payment Until Maturity"]
+    cols = ["ISIN","Series","Maturity Date","Face Value (Rs Mn)",
+            "Coupon Rate","Remaining Coupons","Semiannual Coupon Payment"]
     if show_step_col:
         cols = ["Bond Type"] + cols
 
     hdr = "".join(
-        f'<th class="num">{c}</th>' if c in ("Face Value (Rs Mn)", "Semiannual Coupon Payment",
-                                             "Total Payment Until Maturity", "Remaining Coupons")
+        f'<th class="num">{c}</th>' if c in ("Face Value (Rs Mn)","Semiannual Coupon Payment","Remaining Coupons")
         else f'<th>{c}</th>' for c in cols
     )
 
     body = ""
     for r in rows:
         bt = r['Bond Type']
-        row_cls = ' class="step-row"' if bt != 'normal' else ''
-        body += f"<tr{row_cls}>"
+        body += "<tr>"
         for c in cols:
             v = r.get(c, '')
             if c == "Bond Type":
                 badge = {'normal':'<span class="badge bg">Normal</span>',
-                         'step2': '<span class="badge bw">2-Step ⚠</span>',
-                         'step3': '<span class="badge br">3-Step ⚠⚠</span>'}.get(bt, bt)
+                         'step2':'<span class="badge bw">2-Step ⚠</span>',
+                         'step3':'<span class="badge br">3-Step ⚠⚠</span>'}.get(bt, bt)
                 body += f'<td>{badge}</td>'
             elif c == "ISIN":
                 body += f'<td class="mono">{v}</td>'
             elif c == "Maturity Date":
                 body += f'<td class="dt">{v}</td>'
-            elif c in ("Face Value (Rs Mn)", "Semiannual Coupon Payment", "Total Payment Until Maturity"):
-                try:
-                    body += f'<td class="amt">{float(v):,.3f}</td>'
-                except:
-                    body += f'<td class="amt">{v}</td>'
+            elif c in ("Face Value (Rs Mn)","Semiannual Coupon Payment"):
+                try:    body += f'<td class="amt">{float(v):,.3f}</td>'
+                except: body += f'<td class="amt">{v}</td>'
             elif c == "Remaining Coupons":
-                try:
-                    body += f'<td class="amt">{float(v):.2f}</td>'
-                except:
-                    body += f'<td class="amt">{v}</td>'
+                try:    body += f'<td class="amt">{float(v):.2f}</td>'
+                except: body += f'<td class="amt">{v}</td>'
             elif c == "Coupon Rate" and bt != 'normal':
                 body += f'<td class="warn">{v}</td>'
             else:
                 body += f'<td>{v}</td>'
         body += "</tr>"
 
-    total_pay = sum(r.get('Total Payment Until Maturity') or 0 for r in rows)
     n = len(rows)
     ncols = len(cols)
-    foot = f'<td colspan="{ncols-1}">Total · {n} bond{"s" if n!=1 else ""}</td><td class="ta">{total_pay:,.3f}</td>'
+    total_semi = sum(r.get('Semiannual Coupon Payment') or 0 for r in rows)
+    foot = f'<td colspan="{ncols-1}">Total · {n} bond{"s" if n!=1 else ""}</td><td class="ta">{total_semi:,.3f}</td>'
+
+    current_year_bonds = [r for r in rows if r.get('_mat') and r['_mat'].year == 2026]
+    foot2 = ""
+    if current_year_bonds:
+        cy_principal = sum(r.get('Face Value (Rs Mn)') or 0 for r in current_year_bonds)
+        cy_total = total_semi + cy_principal
+        foot2 = f'<tr><td colspan="{ncols-1}">Maturing in 2026 (Coupon + Principal)</td><td class="ta">{cy_total:,.3f}</td></tr>'
 
     return f"""
 <div class="tbl-wrap">
 <table class="tbl">
 <thead><tr>{hdr}</tr></thead>
 <tbody>{body}</tbody>
-<tfoot><tr>{foot}</tr></tfoot>
+<tfoot><tr>{foot}</tr>{foot2}</tfoot>
 </table>
 </div>"""
 
 
-def render_dashboard(results: list, key_suffix: str = "xl"):
+# ─── NORMAL BONDS VIEW (no step-down ISINs) ───────────────────────────────────
+
+def render_normal_view(results: list):
     normal = [r for r in results if r['Bond Type'] == 'normal']
-    step2  = [r for r in results if r['Bond Type'] == 'step2']
-    step3  = [r for r in results if r['Bond Type'] == 'step3']
-    stepped = step2 + step3
-
-    total_pay  = sum(r.get('Total Payment Until Maturity') or 0 for r in results)
-    total_face = sum(r.get('Face Value (Rs Mn)') or 0 for r in results)
-    n_stepped  = len(stepped)
-    n_normal   = len(normal)
-
-    if stepped:
-        types = []
-        if step2: types.append(f"<strong>{len(step2)} two-step</strong>")
-        if step3: types.append(f"<strong>{len(step3)} three-step</strong>")
-        st.markdown(f"""
-        <div class="step-banner">
-          ⚠ &nbsp; {' and '.join(types)} bond{'s' if n_stepped>1 else ''} detected in this file.
-          These bonds have <strong>multiple coupon rates</strong> — calculations use the <strong>current/final rate only</strong>.
-          Step dates are required for full accuracy. They are flagged separately below.
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown(f"""
-    <div class="metric-row">
-      <div class="mc">
-        <div class="lbl">Total Bonds</div>
-        <div class="val">{len(results)}</div>
-        <div class="sub">{n_normal} normal · {n_stepped} stepped</div>
-      </div>
-      <div class="mc">
-        <div class="lbl">Total Face Value</div>
-        <div class="val">Rs {total_face:,.0f}Mn</div>
-        <div class="sub">Aggregate outstanding</div>
-      </div>
-      <div class="mc">
-        <div class="lbl">Total Coupon Payments</div>
-        <div class="val">Rs {total_pay:,.0f}Mn</div>
-        <div class="sub">Sum of total payments</div>
-      </div>
-      {"" if not stepped else f'<div class="mc warn"><div class="lbl">Stepped Bonds</div><div class="val">{n_stepped}</div><div class="sub">Require step-date verification</div></div>'}
-    </div>
-    """, unsafe_allow_html=True)
+    n_stepped = len([r for r in results if r['Bond Type'] != 'normal'])
 
     st.markdown('<div class="sec-title">Normal Bonds — Schedule by Maturity Month</div>', unsafe_allow_html=True)
+
     if normal:
         for r in normal:
             if r['_mat']:
-                r['_month'] = r['_mat'].strftime('%B')
+                r['_month']    = r['_mat'].strftime('%B')
                 r['_monthnum'] = r['_mat'].month
             else:
-                r['_month'] = 'Unknown'
+                r['_month']    = 'Unknown'
                 r['_monthnum'] = 99
 
         months = sorted(set((r['_monthnum'], r['_month']) for r in normal), key=lambda x: x[0])
 
         for mnum, mname in months:
             month_rows = [r for r in normal if r['_monthnum'] == mnum]
-            mtotal = sum(r.get('Total Payment Until Maturity') or 0 for r in month_rows)
-            with st.expander(f"{mname}  ·  Rs {mtotal:,.0f} Mn  ·  {len(month_rows)} bond{'s' if len(month_rows)!=1 else ''}"):
+            with st.expander(f"{mname}  ·  {len(month_rows)} bond{'s' if len(month_rows)!=1 else ''}"):
                 first_rows = [r for r in month_rows if r['_mat'] and r['_mat'].day == 1]
                 fif_rows   = [r for r in month_rows if r['_mat'] and r['_mat'].day == 15]
-                other_rows = [r for r in month_rows if r['_mat'] and r['_mat'].day not in (1, 15)]
+                other_rows = [r for r in month_rows if r['_mat'] and r['_mat'].day not in (1,15)]
 
                 if first_rows:
                     st.markdown('<div class="grp-lbl"><span class="badge bg">1st</span></div>', unsafe_allow_html=True)
@@ -667,26 +694,60 @@ def render_dashboard(results: list, key_suffix: str = "xl"):
     else:
         st.markdown('<div class="info-box"><div class="ico">📋</div><p>No normal bonds found.</p></div>', unsafe_allow_html=True)
 
+
+# ─── ALL BONDS VIEW (including step-down ISINs) ───────────────────────────────
+
+def render_all_view(results: list):
+    step2   = [r for r in results if r['Bond Type'] == 'step2']
+    step3   = [r for r in results if r['Bond Type'] == 'step3']
+    stepped = step2 + step3
+
+    if not stepped:
+        st.markdown('<div class="info-box"><div class="ico">✅</div><p>No stepped-coupon bonds found in this file.</p></div>', unsafe_allow_html=True)
+        return
+
+    st.markdown(f"""
+    <div class="step-banner">
+      ⚠ &nbsp; <strong>{len(stepped)}</strong> stepped-coupon bond{'s' if len(stepped)>1 else ''} detected.
+      Calculations use the <strong>current/final rate only</strong> — step dates required for full accuracy.
+    </div>
+    """, unsafe_allow_html=True)
+
     if step2:
-        st.markdown('<div class="sec-title" style="color:#E8A44A">2-Step Bonds ⚠</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sec-title" style="color:#C47B1A;border-bottom-color:#F5D89A">2-Step Bonds ⚠</div>', unsafe_allow_html=True)
         st.markdown("""
         <div class="warn-box">
           These bonds have <strong>two coupon rates</strong> (e.g. 12.00%→09.00%).
-          The calculations below use the <strong>current/final rate</strong> only.
-          To calculate accurately, provide the step-down date so coupons at each rate can be counted separately.
+          Calculations use the <strong>current/final rate</strong> only.
         </div>
         """, unsafe_allow_html=True)
         st.markdown(make_table(step2, show_step_col=True), unsafe_allow_html=True)
 
     if step3:
-        st.markdown('<div class="sec-title" style="color:#E85A4A">3-Step Bonds ⚠⚠</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sec-title" style="color:#C43B2A;border-bottom-color:#F5B8B4">3-Step Bonds ⚠⚠</div>', unsafe_allow_html=True)
         st.markdown("""
-        <div class="warn-box" style="border-left-color:#E85A4A;color:#FCA5A5">
+        <div class="warn-box" style="border-left-color:#C43B2A;color:#7A2010;background:#FEEBEA;border-color:#F5B8B4">
           These bonds have <strong>three coupon rates</strong> and require both step dates for accurate calculation.
           Figures shown use the <strong>final/lowest rate</strong> only.
         </div>
         """, unsafe_allow_html=True)
         st.markdown(make_table(step3, show_step_col=True), unsafe_allow_html=True)
+
+
+# ─── DASHBOARD WRAPPER ────────────────────────────────────────────────────────
+
+def render_dashboard(results: list, key_suffix: str = "xl"):
+    # Inner view tabs
+    view_tab_normal, view_tab_all = st.tabs([
+        "📅  View Bonds",
+        "⚠  Step-Down ISINs",
+    ])
+
+    with view_tab_normal:
+        render_normal_view(results)
+
+    with view_tab_all:
+        render_all_view(results)
 
     st.markdown("<br>", unsafe_allow_html=True)
     xlsx = build_excel(results)
@@ -701,7 +762,7 @@ def render_dashboard(results: list, key_suffix: str = "xl"):
 
 # ─── MAIN UI ──────────────────────────────────────────────────────────────────
 
-st.markdown(f"""
+st.markdown("""
 <div class="page-header">
   <div class="sub">Central Bank of Sri Lanka · Fixed Income Operations</div>
   <h1>Bond Maturity and Coupon Schedules</h1>
@@ -709,10 +770,9 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-tab_xl, tab_csv, tab_pdf = st.tabs(["📊  Excel Upload", "📋  CSV Upload", "📄  PDF Upload"])
+tab_xl, tab_csv = st.tabs(["📊  Excel Upload", "📋  CSV Upload"])
 
 def handle_df(df):
-    """Process a dataframe into results."""
     results = []
     for _, row in df.iterrows():
         try:
@@ -751,44 +811,3 @@ with tab_csv:
                 st.markdown('<div class="warn-box">⚠ No valid bond rows found. Check column names.</div>', unsafe_allow_html=True)
         else:
             st.markdown(f'<div class="warn-box">⚠ Could not parse file: {status}</div>', unsafe_allow_html=True)
-
-with tab_pdf:
-    st.markdown("""
-    <div style="background:#0a1610;border:1px solid #1a3020;border-left:3px solid #A8D5A2;
-    border-radius:6px;padding:.9rem 1.2rem;margin-bottom:1rem;font-size:.83rem;color:#A8D5A2">
-      📄 &nbsp; Extract bond data from PDF tables automatically —
-      works with settlement schedules, bond registers, Central Bank circulars, and term sheets.
-    </div>
-    """, unsafe_allow_html=True)
-    pdf_file = st.file_uploader("Upload PDF", type=["pdf"],
-                                 label_visibility="collapsed", key="pdf_up")
-    st.caption("Extracts Maturity Date, ISIN, Series, and Face Value from PDF tables")
-    if pdf_file:
-        cache_key = f"pdf_{pdf_file.name}_{pdf_file.size}"
-        if cache_key not in st.session_state:
-            with st.spinner("Extracting bond data from PDF…"):
-                try:
-                    bonds = extract_pdf_directly(pdf_file.read())
-                    st.session_state[cache_key] = (bonds, None)
-                except Exception as e:
-                    st.session_state[cache_key] = (None, str(e))
-        bonds, err = st.session_state[cache_key]
-        if err:
-            st.markdown(f'<div class="warn-box">⚠ Extraction error: {err}</div>', unsafe_allow_html=True)
-        elif bonds:
-            df_pdf = pd.DataFrame(bonds)
-            results = handle_df(df_pdf)
-            if results:
-                st.success(f"✓ Extracted {len(results)} bonds from PDF")
-                render_dashboard(results, key_suffix="pdf")
-        else:
-            st.markdown('<div class="warn-box">⚠ No bond data found in PDF.</div>', unsafe_allow_html=True)
-
-if not (tab_xl or tab_csv or tab_pdf):
-    st.markdown("""
-    <div class="info-box" style="margin-top:2rem">
-      <div class="ico">🏛️</div>
-      <p>Upload an <strong>Excel</strong>, <strong>CSV</strong>, or <strong>PDF</strong> file above<br>
-      with Maturity Date · ISIN · Series · Face Value</p>
-    </div>
-    """, unsafe_allow_html=True)
