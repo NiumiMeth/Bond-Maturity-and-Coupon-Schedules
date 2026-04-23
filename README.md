@@ -4,7 +4,7 @@ A Streamlit-based application for analyzing Sri Lanka Treasury bond maturity and
 
 ## 🚀 Live Demo
 
-**[Access the app here →](https://bond-maturity-and-coupon-schedules.streamlit.app/)**
+**[Access the app here](https://bond-maturity-and-coupon-schedules-jivcg9zdy7kydcafnmxple.streamlit.app/)**
 
 ## ✨ Features
 
