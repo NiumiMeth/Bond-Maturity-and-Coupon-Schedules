@@ -471,127 +471,174 @@ def build_excel(results: list) -> bytes:
     HDR_FG   = "D4E8D4"
     ALT1_BG  = "FFFFFF"
     ALT2_BG  = "F5F1EB"
-    WARN_BG  = "FEF8EE"
-    WARN_FG  = "7A4E10"
-    ERR_BG   = "FEEBEA"
-    ERR_FG   = "7A2010"
+    MONTH_BG = "E8F0E8"
+    MONTH_FG = "2A4A30"
+    DATE_BG  = "F9F6F0"
+    DATE_FG  = "7A8C7E"
     TOT_BG   = "EDE8DF"
     TOT_FG   = "1C2B1E"
-    HDR_TXT  = "1C2B1E"
+    TOT2_BG  = "F0EBE0"
 
     def s(style='thin', color="C8BFB0"):
         return Side(style=style, color=color)
     def tb():
         return Border(left=s(), right=s(), top=s(), bottom=s())
-    def mb():
-        return Border(left=s('medium','2A4A30'), right=s('medium','2A4A30'),
-                      top=s('medium','2A4A30'), bottom=s('medium','2A4A30'))
 
     normal = [r for r in results if r['Bond Type'] == 'normal']
-    step2  = [r for r in results if r['Bond Type'] == 'step2']
-    step3  = [r for r in results if r['Bond Type'] == 'step3']
+    
+    # Filter and prepare normal bonds
+    normal_with_dates = [r for r in normal if r['_mat'] is not None]
+    for r in normal_with_dates:
+        r['_month'] = r['_mat'].strftime('%B')
+        r['_monthnum'] = r['_mat'].month
+        r['_day'] = r['_mat'].day
 
-    sheet_data = [("All Bonds", results), ("Normal Bonds", normal)]
-    if step2: sheet_data.append(("2-Step Bonds", step2))
-    if step3: sheet_data.append(("3-Step Bonds", step3))
+    # Create Normal Bonds sheet
+    ws = wb.active
+    ws.title = "Normal Bonds"
 
-    first = True
-    for sheet_name, data in sheet_data:
-        if first:
-            ws = wb.active
-            ws.title = sheet_name
-            first = False
-        else:
-            ws = wb.create_sheet(sheet_name)
+    # Title
+    ws.merge_cells('A1:G1')
+    c = ws['A1']
+    c.value = "Treasury Bonds Outstanding — As at 31 March 2026 (Normal Bonds)"
+    c.font = Font(name='Arial', bold=True, size=12, color=HDR_FG)
+    c.fill = PatternFill('solid', fgColor=HDR_BG)
+    c.alignment = Alignment(horizontal='center', vertical='center')
+    ws.row_dimensions[1].height = 26
 
-        ws.merge_cells('A1:I1')
-        c = ws['A1']
-        c.value = f"Treasury Bonds Outstanding — As at 31 March 2026 ({sheet_name})"
-        c.font = Font(name='Arial', bold=True, size=12, color=HDR_FG)
-        c.fill = PatternFill('solid', fgColor=HDR_BG)
-        c.alignment = Alignment(horizontal='center', vertical='center')
-        ws.row_dimensions[1].height = 26
+    cur_row = 2
+    months = sorted(set((r['_monthnum'], r['_month']) for r in normal_with_dates), key=lambda x: x[0])
+    
+    for mnum, mname in months:
+        month_rows = [r for r in normal_with_dates if r['_monthnum'] == mnum]
+        
+        # Month header
+        ws.merge_cells(f'A{cur_row}:G{cur_row}')
+        c = ws[f'A{cur_row}']
+        c.value = f"{mname.upper()} — {len(month_rows)} bond{'s' if len(month_rows) != 1 else ''}"
+        c.font = Font(name='Arial', bold=True, size=11, color=MONTH_FG)
+        c.fill = PatternFill('solid', fgColor=MONTH_BG)
+        c.alignment = Alignment(horizontal='left', vertical='center')
+        ws.row_dimensions[cur_row].height = 24
+        cur_row += 1
 
-        if sheet_name != "Normal Bonds" and (step2 or step3):
-            ws.merge_cells('A2:I2')
-            c = ws['A2']
-            c.value = "⚠  Stepped coupon bonds present — calculations use current/final rate only. Verify step dates."
-            c.font = Font(name='Arial', size=9, color=WARN_FG)
-            c.fill = PatternFill('solid', fgColor=WARN_BG)
-            c.alignment = Alignment(horizontal='center', vertical='center')
-            ws.row_dimensions[2].height = 18
-            hdr_row = 3
-        else:
-            hdr_row = 2
+        # Group by date within month
+        first_rows = [r for r in month_rows if r['_day'] == 1]
+        fif_rows = [r for r in month_rows if r['_day'] == 15]
+        other_rows = [r for r in month_rows if r['_day'] not in (1, 15)]
 
-        headers = ["Maturity Date","ISIN","Series","Face Value (Rs Mn)",
-                   "Coupon Rate","Bond Type","Remaining Coupons","Semiannual Coupon Payment"]
+        for date_group, date_label in [(first_rows, "1st"), (fif_rows, "15th"), (other_rows, "Other Dates")]:
+            if not date_group:
+                continue
 
-        ws.row_dimensions[hdr_row].height = 32
-        for ci, h in enumerate(headers, 1):
-            c = ws.cell(row=hdr_row, column=ci, value=h)
-            c.font = Font(name='Arial', bold=True, size=9, color=HDR_FG)
-            c.fill = PatternFill('solid', fgColor=HDR_BG)
-            c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-            c.border = tb()
+            # Date subheader
+            ws.merge_cells(f'A{cur_row}:G{cur_row}')
+            c = ws[f'A{cur_row}']
+            c.value = date_label
+            c.font = Font(name='Arial', italic=True, size=9, color=DATE_FG)
+            c.fill = PatternFill('solid', fgColor=DATE_BG)
+            c.alignment = Alignment(horizontal='left', vertical='center')
+            ws.row_dimensions[cur_row].height = 18
+            cur_row += 1
 
-        for ri, row in enumerate(data):
-            er = ri + hdr_row + 1
-            bt = row['Bond Type']
-            if bt == 'step2':
-                bg, fc = WARN_BG, WARN_FG
-            elif bt == 'step3':
-                bg, fc = ERR_BG, ERR_FG
-            else:
-                bg, fc = (ALT1_BG if ri % 2 == 0 else ALT2_BG), HDR_TXT
-            fill = PatternFill('solid', fgColor=bg)
+            # Column headers
+            headers = ["ISIN", "Series", "Maturity Date", "Face Value (Rs Mn)", "Coupon Rate", "Remaining Coupons", "Semiannual Coupon Payment"]
+            ws.row_dimensions[cur_row].height = 22
+            for ci, h in enumerate(headers, 1):
+                c = ws.cell(row=cur_row, column=ci, value=h)
+                c.font = Font(name='Arial', bold=True, size=9, color=HDR_FG)
+                c.fill = PatternFill('solid', fgColor=HDR_BG)
+                c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                c.border = tb()
+            cur_row += 1
 
-            vals = [
-                row['Maturity Date'], row['ISIN'], row['Series'],
-                row['Face Value (Rs Mn)'], row['Coupon Rate'],
-                {'normal':'Normal','step2':'2-Step ⚠','step3':'3-Step ⚠⚠'}.get(bt, bt),
-                row['Remaining Coupons'],
-                row['Semiannual Coupon Payment'],
-            ]
-            for ci, val in enumerate(vals, 1):
-                c = ws.cell(row=er, column=ci, value=val)
-                c.fill = fill; c.border = tb()
-                c.font = Font(name='Arial', size=9, color=fc)
-                if ci == 4:
-                    c.number_format = '#,##0.00'; c.alignment = Alignment(horizontal='right')
-                elif ci == 5:
-                    c.alignment = Alignment(horizontal='center')
-                elif ci == 7:
-                    c.number_format = '0.00'; c.alignment = Alignment(horizontal='center')
-                elif ci == 8:
-                    c.number_format = '#,##0.000'; c.alignment = Alignment(horizontal='right')
-                else:
-                    c.alignment = Alignment(horizontal='center' if ci == 1 else 'left')
+            # Data rows
+            for ri, row in enumerate(date_group):
+                bg = ALT1_BG if ri % 2 == 0 else ALT2_BG
+                fill = PatternFill('solid', fgColor=bg)
 
-        tr = hdr_row + len(data) + 1
-        ws.merge_cells(f'A{tr}:C{tr}')
-        c = ws.cell(row=tr, column=1, value="TOTAL")
-        c.font = Font(name='Arial', bold=True, size=9, color=TOT_FG)
-        c.fill = PatternFill('solid', fgColor=TOT_BG)
-        c.alignment = Alignment(horizontal='center')
-        c.border = mb()
-        for ci, col_idx in [(4,4),(8,8)]:
-            cl = get_column_letter(ci)
-            c = ws.cell(row=tr, column=ci)
-            c.value = f'=SUM({cl}{hdr_row+1}:{cl}{tr-1})'
+                vals = [
+                    row['ISIN'],
+                    row['Series'],
+                    row['Maturity Date'],
+                    row['Face Value (Rs Mn)'],
+                    row['Coupon Rate'],
+                    row['Remaining Coupons'],
+                    row['Semiannual Coupon Payment'],
+                ]
+                for ci, val in enumerate(vals, 1):
+                    c = ws.cell(row=cur_row, column=ci, value=val)
+                    c.fill = fill
+                    c.border = tb()
+                    c.font = Font(name='Arial', size=9)
+                    
+                    if ci == 4:  # Face Value
+                        c.number_format = '#,##0.000'
+                        c.alignment = Alignment(horizontal='right')
+                    elif ci == 5:  # Coupon Rate
+                        c.alignment = Alignment(horizontal='center')
+                    elif ci == 6:  # Remaining Coupons
+                        c.number_format = '0.00'
+                        c.alignment = Alignment(horizontal='center')
+                    elif ci == 7:  # Semiannual Coupon Payment
+                        c.number_format = '#,##0.000'
+                        c.alignment = Alignment(horizontal='right')
+                    else:
+                        c.alignment = Alignment(horizontal='left')
+                cur_row += 1
+
+            # Subtotal for this date group
+            total_coupon = sum(r.get('Semiannual Coupon Payment') or 0 for r in date_group)
+            c = ws.cell(row=cur_row, column=1)
+            c.value = f"Total · {len(date_group)} bond{'s' if len(date_group) != 1 else ''}"
             c.font = Font(name='Arial', bold=True, size=9, color=TOT_FG)
             c.fill = PatternFill('solid', fgColor=TOT_BG)
-            c.border = mb()
-            c.alignment = Alignment(horizontal='right')
-            c.number_format = '#,##0.00' if ci == 4 else '#,##0.000'
-        for ci in (5,6,7):
-            c = ws.cell(row=tr, column=ci)
-            c.value = ''
+            c.alignment = Alignment(horizontal='left')
+            ws.merge_cells(f'A{cur_row}:F{cur_row}')
+            
+            c = ws.cell(row=cur_row, column=7)
+            c.value = total_coupon
+            c.font = Font(name='Arial', bold=True, size=9, color=TOT_FG)
             c.fill = PatternFill('solid', fgColor=TOT_BG)
-            c.border = mb()
-        for ci, w in enumerate([13,18,24,16,20,12,14,22,24], 1):
-            ws.column_dimensions[get_column_letter(ci)].width = w
-        ws.freeze_panes = f'A{hdr_row+1}'
+            c.number_format = '#,##0.000'
+            c.alignment = Alignment(horizontal='right')
+            c.border = tb()
+            cur_row += 1
+
+            # Empty row for spacing
+            cur_row += 1
+
+        # Check for 2026 maturing bonds in this month
+        month_2026 = [r for r in month_rows if r['_mat'].year == 2026]
+        if month_2026:
+            principal_total = sum(r.get('Face Value (Rs Mn)') or 0 for r in month_2026)
+            coupon_total = sum(r.get('Semiannual Coupon Payment') or 0 for r in month_2026)
+            combined_total = principal_total + coupon_total
+
+            c = ws.cell(row=cur_row, column=1)
+            c.value = "Maturing in 2026 (Coupon + Principal)"
+            c.font = Font(name='Arial', bold=True, size=9, color=TOT_FG)
+            c.fill = PatternFill('solid', fgColor=TOT2_BG)
+            c.alignment = Alignment(horizontal='left')
+            ws.merge_cells(f'A{cur_row}:F{cur_row}')
+            
+            c = ws.cell(row=cur_row, column=7)
+            c.value = combined_total
+            c.font = Font(name='Arial', bold=True, size=9, color=TOT_FG)
+            c.fill = PatternFill('solid', fgColor=TOT2_BG)
+            c.number_format = '#,##0.000'
+            c.alignment = Alignment(horizontal='right')
+            c.border = tb()
+            cur_row += 2
+
+    # Column widths
+    ws.column_dimensions['A'].width = 18
+    ws.column_dimensions['B'].width = 18
+    ws.column_dimensions['C'].width = 16
+    ws.column_dimensions['D'].width = 18
+    ws.column_dimensions['E'].width = 14
+    ws.column_dimensions['F'].width = 16
+    ws.column_dimensions['G'].width = 22
 
     buf = io.BytesIO()
     wb.save(buf)
