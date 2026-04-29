@@ -451,6 +451,10 @@ def parse_uploaded_file(uploaded_file):
     df.rename(columns=col_map, inplace=True)
 
     if 'Maturity Date' in df.columns:
+        # Fill missing maturity dates with the previous row's date
+        df['Maturity Date'] = df['Maturity Date'].ffill()
+        
+        # Remove rows where maturity date is still empty (first rows with no prior date)
         df = df[df['Maturity Date'].notna()]
         df = df[df['Maturity Date'].astype(str).str.strip() != '']
         df = df[df['Maturity Date'].astype(str).str.strip().str.lower() != 'maturity date']
@@ -673,10 +677,17 @@ def render_normal_view(results: list):
                 r['_month']    = 'Unknown'
                 r['_monthnum'] = 99
 
-        months = sorted(set((r['_monthnum'], r['_month']) for r in normal), key=lambda x: x[0])
+        # Filter to only show bonds with valid maturity dates
+        normal_with_dates = [r for r in normal if r['_monthnum'] != 99]
+        
+        if not normal_with_dates:
+            st.markdown('<div class="info-box"><div class="ico">📋</div><p>No normal bonds found.</p></div>', unsafe_allow_html=True)
+            return
+        
+        months = sorted(set((r['_monthnum'], r['_month']) for r in normal_with_dates), key=lambda x: x[0])
 
         for mnum, mname in months:
-            month_rows = [r for r in normal if r['_monthnum'] == mnum]
+            month_rows = [r for r in normal_with_dates if r['_monthnum'] == mnum]
             with st.expander(f"{mname}  ·  {len(month_rows)} bond{'s' if len(month_rows)!=1 else ''}"):
                 first_rows = [r for r in month_rows if r['_mat'] and r['_mat'].day == 1]
                 fif_rows   = [r for r in month_rows if r['_mat'] and r['_mat'].day == 15]
